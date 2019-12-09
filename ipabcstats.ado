@@ -33,8 +33,8 @@ Wishlist:
 
 */
 
-program bcstats0, rclass
-    version 	14
+program ipabcstats, rclass
+    version 	14.2
     cap version 15.1 /* written in stata 15.1 but will run on stata 14.2 */ 
 
     #d;
@@ -43,16 +43,15 @@ program bcstats0, rclass
     	id(namelist) 
     	ENUMerator(name) [ENUMTeam(name)] 
     	BACKchecker(name) [BCTeam(name)]
-    	[t1vars(namelist) t2vars(namelist) t3vars(namelist)] 
+		[t1vars(namelist) t2vars(namelist) t3vars(namelist)] 
     	okrange(str)
     	[ttest(namelist) Level(real -1) signrank(namelist) prtest(namelist) RELiability(namelist)] 
     	[showid(str)] 
     	[KEEPSUrvey(namelist) keepbc(namelist) full FILEname(str) replace] 
-    	[EXCLUDENum(numeric) EXCLUDEStr(str) EXCLUDEMISSing LOwer UPper NOSymbol TRim]
-    	[surveydate(str) bcdate(str)]
+    	[EXCLUDENum(numlist) EXCLUDEStr(str) EXCLUDEMISSing LOwer UPper NOSymbol TRim]
+    	[surveydate(name) bcdate(name)]
     ;
-	#d cr	
-
+	#d cr			
 		* check syntax
 		* check that at least one variable is specified in t1, t2 or t3
 		if "`t1vars'`t2vars'`t3vars'" == "" {
@@ -483,23 +482,7 @@ program bcstats0, rclass
 			}
 
 
-			* Export Test
-			use `_fmdata', clear
-			postfile postchecks str32 variable str80 label double(tt_sN tt_bN tt_sM tt_bM tt_d tt_p)
-			foreach var in `checkvars' {
-				ttest `var' == _bc`var'
-				
-				* post postchecks	("`var'") ("`:var label `var''") (`r(N_1)') (`r(N_2)') (`r(mu_1)') (`r(mu_2)') ()
-				
-				loc sN `r(N_1)'
-				loc bN `r(N_2)'
-				loc sM `r(mu_1)'
-				loc bM `r(mu_2)'
-				loc p   `r(p_l)'
 
-				
-
-			}
 			
 		}	
 
