@@ -463,6 +463,43 @@ program ipabcstats, rclass
 			keep bc_subdate vartype _vdiff valcount varcount
 			reshape wide _vdiff valcount varcount, i(bc_subdate) j(vartype)
 
+			*create daily, weekly, or monthly graph
+			sum bc_subdate
+			loc mindate = `r(min)'
+			loc maxdate = `r(max)'
+			loc count = `r(max)' - `r(min)'
+
+			if `count' <= 30 {
+				gen days = _n
+				loc unit = "days"
+				loc titleunit "Daily"
+			}
+
+			else {
+
+				if `count' > 210 {
+					loc unit "months"
+					loc numberofdays 30
+					loc titleunit "Monthly"
+				}
+
+				else {
+					loc unit "weeks"
+					loc numberofdays 7
+					loc titleunit "Weekly"
+				}
+				
+				loc units = ceil((`maxdate' - `mindate')/`numberofdays')
+				gen `unit' = .
+				forval i = 1/`units' {
+					replace `unit' = `i' if bc_subdate >= `mindate'
+					loc mindate = `mindate' + `numberofdays'
+
+				}
+	
+				collapse (max) varcount* (sum) valcount* _vdiff*, by(`unit')
+			}
+
 			forval i = 1/3 {
 				gen error_rate`i' = _vdiff`i'/valcount`i', after(_vdiff`i')
 				lab var error_rate`i' "Type `i'"
@@ -473,11 +510,11 @@ program ipabcstats, rclass
 			gen error_rate_total = _vdifftotal / valcounttotal
 			lab var error_rate_total "Total" 
 
-			gen Day = _n 
-			graph twoway connected error_rate* Day, title("Error Rates (daily)") scheme(s1color)
+			*gen Day = _n 
+			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") scheme(s1color)
 			graph export errorrates.png, width(460) replace
-			drop error_rate* Day
-			reshape long _vdiff valcount varcount, i(bc_subdate) j(vartype)
+			drop error_rate*
+			reshape long _vdiff valcount varcount, i(`unit') j(vartype)
 
 			collapse (first) varcount (sum) valcount _vdiff, by(vartype)
 
