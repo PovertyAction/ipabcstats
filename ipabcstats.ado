@@ -33,6 +33,10 @@ Wishlist:
 
 */
 
+cap program drop ipabcstats
+cap program drop change_str
+cap program drop create_stats
+
 program ipabcstats, rclass
     version 	14.2
     cap version 15.1 /* written in stata 15.1 but will run on stata 14.2 */ 
@@ -718,8 +722,15 @@ program ipabcstats, rclass
 			unab id: `id'
 
 			* mata: adjust_column_width("`filename'", "comparison")
-			* mata: format_comparison("`filename'", "comparison", `:word count `id'', `:word count `keepsurvey'', `:word count `keepbc'')
-			
+
+			loc idcount `:word count `id''
+			loc enumcount `:word count `enumerator' `enumteam''
+			loc bcer `:word count `backchecker' `bcteam''
+			loc keeps `: word count `keepsurvey''
+			loc keepb `:word count `keepbc''
+
+			mata: format_comparison("`filename'", "comparison")
+
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator) 
 			export excel using "`filename'", sheet("enumerator stats", replace) first(varl) cell(B3)
@@ -833,65 +844,6 @@ end
 * adjust_column_width: adjust column width of excel workbook using datset in memory
 mata:
 mata clear
-void format_comparison(string scalar filename, string scalar sheetname, real scalar id_cnt, real scalar keepsv_cnt, real scalar keepbc_cnt)
-{
-
-	class xl scalar b
-	real scalar column_width, columns, ncols, nrows, i, colmaxval
-
-	ncols = st_nvar()
-	nrows = st_nobs() + 2
-
-	ncols
-	nrows
-
-	b = xl()
-
-	b.load_book(filename)
-	b.set_sheet(sheetname)
-	b.set_mode("open")
-
-	b.set_sheet_gridlines(sheetname, "off")
-	b.set_border((3, nrows + 1), (2, ncols), "thin")
-	b.set_top_border(3, (2, ncols), "medium")
-	b.set_bottom_border(3, (2, ncols), "medium")
-	b.set_bottom_border(nrows + 1, (2, ncols), "medium")
-	b.set_left_border((3, nrows + 1), id_cnt + 1, "medium")
-	b.set_right_border((3, nrows + 1), id_cnt + 1, "medium")
-	b.set_right_border((3, nrows + 1), id_cnt + 3, "medium")
-	b.set_right_border((3, nrows + 1), id_cnt + 6, "medium")
-	b.set_right_border((3, nrows + 1), id_cnt + 8, "medium")
-	b.set_right_border((3, nrows + 1), id_cnt + 10, "medium")
-	b.set_right_border((3, nrows + 1), id_cnt + 11, "medium")	
-	b.set_row_height(1, 1, 10)
-	b.set_column_width(1, 1, 1)
-
-	if (ncols > (id_cnt + 11)) {
-		b.set_right_border((3, nrows + 1), id_cnt + 11 + keepsv_cnt, "medium")
-		b.set_right_border((3, nrows + 1), ncols, "medium")
-
-		if (keepsv_cnt > 0) {
-			if (keepsv_cnt > 1) {
-				b.set_sheet_merge(sheetname, (2, 2), (id_cnt + 12, id_cnt + 11 + keepsv_cnt))
-			}
-			b.put_string(2, id_cnt + 12, "survey keeplist")
-			b.set_horizontal_align(2, id_cnt + 12, "center")
-		}
-		
-		if (keepbc_cnt > 0) {
-			if (keepbc_cnt > 1) {
-				b.set_sheet_merge(sheetname, (2, 2), (id_cnt + 12 + keepsv_cnt, ncols))
-			}
-			b.put_string(2, id_cnt + 12 + keepsv_cnt, "backcheck keeplist")
-			b.set_horizontal_align(2, id_cnt + 12 + keepsv_cnt, "center")
-		}
-		b.set_border(2, (id_cnt + 12, ncols), "medium")
-		b.set_font_bold((2, 3), (2, ncols), "on")
-	}
-
-	b.close_book()
-}
-
 
 void format_enumstats(string scalar filename, string scalar sheetname, real scalar type1, real scalar type2, real scalar type3)
 {
@@ -1073,6 +1025,49 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 	b.set_top_border(2, (2, 9), "thin")
 	
 	b.close_book()
+}
+
+
+
+void format_comparison(string scalar filename, string scalar sheetname)
+{
+
+	class xl scalar b
+	real scalar idpos, enumpos, bcerpos, varpos, spos, bcpos, respos, datepos, keepspos, keepbcpos
+	real matrix positions 
+
+	b = xl()
+
+	b.load_book(filename)
+	b.set_sheet(sheetname)
+	b.set_mode("open")
+	b.set_sheet_gridlines(sheetname, "off")
+	idpos = 2 + strtoreal(st_local("idcount"))
+	enumpos = idpos + strtoreal(st_local("enumcount"))
+	bcerpos = enumpos + strtoreal(st_local("bcer"))
+	varpos = bcerpos + 3
+	spos = varpos + 2
+	bcpos = spos + 2
+	respos = bcpos + 1
+	datepos = respos + 3
+	keepspos = datepos + strtoreal(st_local("keeps"))
+	keepbcpos = keepspos + strtoreal(st_local("keepb"))
+
+	nrows = 2821 
+
+	positions = (idpos\enumpos\bcerpos\varpos\spos\bcpos\respos\datepos\keepspos\keepbcpos)
+	positions
+	
+	b.set_left_border((4, nrows), 2, "medium")
+	
+	for (i = 1; i<=10; i++) {
+		b.set_left_border((4, 2821), positions[i], "medium")
+	}
+
+
+
+	b.close_book()
+
 }
 
 
