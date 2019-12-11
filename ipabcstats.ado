@@ -745,7 +745,6 @@ program ipabcstats, rclass
 			unab id: `id'
 
 
-			mata: adjust_column_width("`filename'", "comparison")
 
 			loc idcount `:word count `id''
 			loc enumcount `:word count `enumerator' `enumteam''
@@ -754,6 +753,7 @@ program ipabcstats, rclass
 			loc keepb `:word count `keepbc''
 
 			mata: format_comparison("`filename'", "comparison")
+			mata: adjust_column_width("`filename'", "comparison")
 
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator) 
@@ -961,6 +961,10 @@ void adjust_column_width(string scalar filename, string scalar sheetname)
 			namelen = 12
 		}
 		
+		else if (st_varname(i) == st_local("surveydate") | st_varname(i) == st_local("bcdate") | st_varname(i) == "starttime" | st_varname(i) == "endtime" | st_varname(i) == "submissiondate" | st_varname(i) == "_bcstarttime" | st_varname(i) == "_bcendtime" | st_varname(i) == "_bcsubmissiondate") {
+			namelen = 16
+		} 
+
 		else {
 			namelen = strlen(st_varname(i))
 		}
@@ -977,10 +981,14 @@ void adjust_column_width(string scalar filename, string scalar sheetname)
 		if (column_width > 101) {
 			column_width = 101
 		}	
+		if (i==1) {
+			column_width = 1
+		}
 		
 		b.set_column_width(i, i, column_width)
 
 	}
+
 		b.close_book()
 
 }
@@ -1057,7 +1065,7 @@ void format_comparison(string scalar filename, string scalar sheetname)
 {
 
 	class xl scalar b
-	real scalar idpos, enumpos, bcerpos, varpos, spos, bcpos, respos, datepos, keepspos, keepbcpos
+	real scalar idpos, enumpos, bcerpos, varpos, spos, bcpos, respos, datepos, keepspos, keepbcpos, lastcol
 	real matrix positions 
 
 	b = xl()
@@ -1091,6 +1099,16 @@ void format_comparison(string scalar filename, string scalar sheetname)
 
 	b.set_sheet_merge(sheetname, (2, 2), (respos, respos+2))
 
+	if (strtoreal(st_local("keeps")) > 0) {
+		b.set_sheet_merge(sheetname, (3, 3), (datepos, keepspos - 1))
+		b.put_string(3, datepos, "Keep in Survey")
+	}
+	
+	if (strtoreal(st_local("keepbc")) > 0) {
+		b.set_sheet_merge(sheetname, (3, 3), (keepspos, keepbcpos - 1))
+		b.put_string(3, keepspos, "Keep in Backcheck")
+	}
+
 	b.set_top_border((4, 5), (2, keepbcpos-1), "medium")
 	b.set_bottom_border(nrows, (2, keepbcpos-1), "medium")
 	
@@ -1099,7 +1117,11 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	b.put_string(3, respos + 2, "Difference")
 	b.put_string(2, respos, "Dates")
 
-	b.set_border((2, 3), (respos, respos + 2), "medium")
+	lastcol = respos
+	if (strtoreal(st_local("keepbc")) > 0) {
+		lastcol = keepbcpos - 1
+	}
+	b.set_border(3, (respos, lastcol), "medium")
 	b.set_horizontal_align((2, 3), (respos, respos + 2), "center")
 
 	b.close_book()
