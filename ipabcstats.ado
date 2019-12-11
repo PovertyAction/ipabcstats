@@ -32,14 +32,12 @@ Wishlist:
 	-- fuzzy match strings (preferable write new command, alternative use matchit, reclink or strgroup)
 
 */
-*cap program drop ipabcstats
-*cap program drop change_str
-*cap program drop create_stats
 
 program ipabcstats, rclass
     version 	14.2
     cap version 15.1 /* written in stata 15.1 but will run on stata 14.2 */ 
-
+	set graphics off
+   
     #d;
     syntax, 																			
     	Surveydata(str) Bcdata(str)
@@ -120,7 +118,7 @@ program ipabcstats, rclass
 		}
 		
 		* temp datasets and vars
-		tempfile _sdata _bdata _mdata _diffs _cdata _enumdata _enumteamdata _bcerdata _bcerteamdata _checks _fmdata
+		tempfile _sdata _bdata _mdata _diffs _cdata _enumdata _enumteamdata _bcerdata _bcerteamdata _checks _fmdata _bconly
 
 		qui {
 			* import only relevant variables in survey dataset
@@ -143,6 +141,9 @@ program ipabcstats, rclass
 			}
 
 			* change string variables if applicable
+			unab t1vars: `t1vars'
+			unab t2vars: `t2vars'
+			unab t3vars: `t3vars'
 			unab tvars: `t1vars' `t2vars' `t3vars'
 			change_str `tvars', `nosymbol' `lower' `upper' `trim'
 
@@ -316,6 +317,12 @@ program ipabcstats, rclass
 			unab admin:	`id' `enumerator' `enumteam' `backchecker' `bcteam' `surveydate' `bcdate'
 			save `_mdata', replace
 
+			keep if _mergebc == 2
+			save `_bconly', emptyok
+
+			use `_mdata', clear
+			keep if _mergebc == 3
+			save `_mdata', replace 
 			* keep data of number of survey back checked by enumerator and enumteam
 			keep `enumerator'
 			bys `enumerator': gen backchecks = _N
@@ -341,7 +348,7 @@ program ipabcstats, rclass
 			foreach var in `tvars' {
 				use `_mdata', clear
 
-				keep `admin' `keepsurvey' `bc_keepbc' `var' _bc`var'
+				keep `admin' `keepsurvey' `bc_keepbc' `var' _bc`var' `surveydate' `bcdate'
 				
 				* generate variable to mark type
 				gen _vtype = cond(`:list var in t1vars', "type 1", cond(`:list var in t2vars', "type 2", "type 3"))
@@ -434,37 +441,48 @@ program ipabcstats, rclass
 			cap ren (_surveylab _backchecklab _comp_comment) ///
 					(surveylabel backchecklabel comment)			
 
-			cap ren (`surveydate' `bcdate') ///
-					(survey_date bc_date)
-			if  "`surveydate'" ~= "" loc surveydate survey_date
-			if  "`bcdate'" ~= "" loc bcdate bc_date
-							 
+			* create days difference variable
+			gen _surveyday = dofc(`surveydate')
+			gen _bcday = dofc(`bcdate')
+			format _surveyday _bcday %td
+			gen days = _bcday - _surveyday
+					
+			* add average difference between survey and backcheck
+			bysort `id' : gen first = _n
+			sum days if first == 1
+			loc days_diff : piece 1 4 of  "`r(mean)'"
+
 			* export comparison/differences
 			gen result = cond(_vdiff == ., "not compared", cond(!_vdiff, "not different", "different"))
 
 			cap gen surveylabel = ""
 			cap gen backchecklabel = ""
 
-			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `keepsurvey' `bc_keepbc' `surveydate' `bcdate' _vdiff
-			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `keepsurvey' `bc_keepbc' `surveydate' `bcdate' _vdiff
+			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel ///
+			 backcheck backchecklabel result `keepsurvey' `bc_keepbc' `surveydate' `bcdate' days ///
+			 _surveyday _vdiff
+			
+			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel ///
+			backcheck backchecklabel result `keepsurvey' `bc_keepbc' `surveydate' `bcdate' days ///
+			_surveyday _vdiff
 
 			save `_cdata'
 
 			* Create summary sheet
-			gen bc_subdate = dofc(bc_date)
-			format bc_subdate %td
 			encode type, gen(vartype)
 
-			collapse (count) valcount = _vdiff (sum) _vdiff, by(vartype bc_subdate variable)
+			* collapse to surveydate and type
+			collapse (count) valcount = _vdiff (sum) _vdiff, by(vartype _surveyday)
+			
 
-			bysort bc_subdate vartype: gen varcount = _N
+			keep _surveyday vartype _vdiff valcount 
 
-			collapse (max) varcount (sum) valcount _vdiff, by(vartype bc_subdate)
-			keep bc_subdate vartype _vdiff valcount varcount
-			reshape wide _vdiff valcount varcount, i(bc_subdate) j(vartype)
+			* reshape to table	
+			reshape wide _vdiff valcount , i(_surveyday) j(vartype)
+
 
 			*create daily, weekly, or monthly graph
-			sum bc_subdate
+			sum _surveyday
 			loc mindate = `r(min)'
 			loc maxdate = `r(max)'
 			loc count = `r(max)' - `r(min)'
@@ -492,41 +510,52 @@ program ipabcstats, rclass
 				loc units = ceil((`maxdate' - `mindate')/`numberofdays')
 				gen `unit' = .
 				forval i = 1/`units' {
-					replace `unit' = `i' if bc_subdate >= `mindate'
+					replace `unit' = `i' if _surveyday >= `mindate'
 					loc mindate = `mindate' + `numberofdays'
 
 				}
 	
-				collapse (max) varcount* (sum) valcount* _vdiff*, by(`unit')
+				collapse (sum) valcount* _vdiff*, by(`unit')
 			}
+
 
 			forval i = 1/3 {
 				gen error_rate`i' = _vdiff`i'/valcount`i', after(_vdiff`i')
 				lab var error_rate`i' "Type `i'"
 			}
 
+
 			egen valcounttotal = rowtotal(valcount1 valcount2 valcount3)
 			egen _vdifftotal = rowtotal(_vdiff1 _vdiff2 _vdiff3)
 			gen error_rate_total = _vdifftotal / valcounttotal
 			lab var error_rate_total "Total" 
 
-			*gen Day = _n 
-			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") scheme(s1color)
-			graph export errorrates.png, width(460) replace
-			drop error_rate*
-			reshape long _vdiff valcount varcount, i(`unit') j(vartype)
 
-			collapse (first) varcount (sum) valcount _vdiff, by(vartype)
+			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") scheme(s1color) name(summary)
+			graph export errorrates.png, width(460) replace name(summary)
+			drop error_rate*
+			reshape long _vdiff valcount, i(`unit') j(vartype)
+
+			collapse (sum) valcount _vdiff, by(vartype)
 
 			set obs 4
 			replace vartype = 4 in 4
 			lab define vartype 4 "All", add
-			foreach var in varcount valcount _vdiff {
+			foreach var in valcount _vdiff {
 				qui sum `var'
 				replace `var' = `r(sum)' in 4
 			}
 			g error_rate = _vdiff / valcount
+
+			gen varcount = ., after(vartype)
+			forval i = 1/3 {
+				replace varcount = `: word count `t`i'vars'' if _n == `i'
+			}
+
+			replace varcount = `: word count `tvars'' in 4
+
 			g empty = "", after(vartype)
+
 			lab var varcount "# variables"
 			lab var valcount "# values"
 			lab var _vdiff "differences"
@@ -542,20 +571,23 @@ program ipabcstats, rclass
 			if "`full'" == "" keep if _vdiff == 1
 			save `_cdata', replace
 
-			
-			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `keepsurvey' ///
-				using "`filename'", sheet("comparison") first(var) cell(B3)
+			lab var `surveydate' "`surveydate'"
+			loc lab = substr("`bcdate'", 4, .)
+			lab var `bcdate' "`lab'"
+
+			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `keepsurvey' `surveydate' `bcdate' days ///
+				using "`filename'", sheet("comparison") first(varl) cell(B4)
 			
 			if "`bc_keepbc'" ~= "" {
 				
-				unab exp_vars: `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `keepsurvey'
+				unab exp_vars: `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `keepsurvey' `surveydate' `bcdate' days
 				loc range_cnt = wordcount("`exp_vars'")
 
 				mata: st_local("alphavar", invtokens(numtobase26(`=`range_cnt'+2')))
 
 				keep `bc_keepbc'
 				ren _bc* *
-
+		
 				export excel using "`filename'", sheet("comparison", modify) first(var) cell(`alphavar'3)
 			}
 			
@@ -634,7 +666,7 @@ program define create_stats, rclass
 	replace `type' = trim(itrim(subinstr(`type', "type ", "", 1)))
 	reshape wide compared differences, i(`enum') j(`type') str
 
-	merge 1:1 `enum' using `enumdata', nogen assert(match)
+	merge 1:1 `enum' using `enumdata', nogen keep(master match)
 
 	if "`bc'" == "" {
 		order `enum' surveys backchecks
@@ -666,6 +698,9 @@ program define create_stats, rclass
 	gen error_rate = round((differences/compared) * 100, 0.01)
 	label var error_rate "% different"
 	label var `enum' "`enumlabel'"
+	
+	ds `enum', not
+	recode `r(varlist)' (. = 0) // recode missing/no comparisons to 0
 
 	return local type1 = `type1'
 	return local type1 = `type2'
@@ -859,16 +894,18 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 {
 
 	class xl scalar b
+	numeric scalar border
 
 	b = xl()
-
+	
 	b.load_book(filename)
 	b.set_sheet(sheetname)
 	b.set_mode("open")
 	b.set_sheet_gridlines(sheetname, "off")
 
 	b.put_string(2, 3, "Back Check Analysis")
-	b.put_string(4, 3, "Summary")
+	b.put_string(4, 3, "Average Days between Survey and Backcheck: " + st_local("days_diff") ) 
+
 
 	b.put_string(6, 3, "Date: ")
 	b.put_string(6, 5, date)
@@ -894,10 +931,6 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 	b.set_sheet_merge(sheetname, (2, 2), (3, 8))
 	b.set_sheet_merge(sheetname, (4, 4), (3, 8))
 
-	b.set_left_border((2, 16), 2, "thin")
-	b.set_top_border(2, (2, 9), "thin")
-	b.set_right_border((2, 16), 9, "thin")
-	b.set_bottom_border(16, (2, 9), "thin")
 
 	for (i = 6; i<=15; i++) {
 		b.set_sheet_merge(sheetname, (i, i), (3, 4))		
@@ -907,9 +940,19 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 	b.set_font_bold((11, 15), 3, "on")
 	b.set_font_bold(11, (5, 8), "on")
 	b.set_horizontal_align((2, 4), 3, "center")
+	
+	border = 16
 
-	b.put_picture(18, 3, "errorrates.png")
+	if (strtoreal(st_local("count")) > 1) {
+		b.put_picture(18, 3, "errorrates.png")
+		border = 35
+	}
 
+	b.set_bottom_border(border, (2, 9), "thin")
+	b.set_left_border((2, border), 2, "thin")
+	b.set_right_border((2, border), 9, "thin")
+	b.set_top_border(2, (2, 9), "thin")
+	
 	b.close_book()
 }
 
