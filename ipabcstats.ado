@@ -545,11 +545,12 @@ program ipabcstats, rclass
 				loc ++i
 				gen _seqid 	= _n 
 
-				keep `admin' `keepsurvey' `bc_keepbc' _v* _survey* _backcheck* _seq* _compared _comp_comment `surveydate' `bcdate'
-				
+				keep `admin' `keepsurvey' `bc_keepbc' _v* _survey* _backcheck* _seq* _compared `surveydate' `bcdate'
+
 				append using `_diffs'
 				save `_diffs', replace
 			}
+
 
 			* rename variables in comparison data
 			ren (_vtype _vvar _vvlab _survey _backcheck) ///
@@ -574,6 +575,10 @@ program ipabcstats, rclass
 
 			cap gen surveylabel = ""
 			cap gen backchecklabel = ""
+
+			foreach name of varlist survey surveylabel backcheck backchecklab `id' `enumerator' `enumteam' `backchecker' `bcteam' `keepsurvey' {
+				lab var `name' "`name'"
+			}
 
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel ///
 			 backcheck backchecklabel result `keepsurvey' `bc_keepbc' `surveydate' `bcdate' days ///
@@ -1072,3 +1077,4 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 
 
 end
+
