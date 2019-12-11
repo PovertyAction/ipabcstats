@@ -44,12 +44,12 @@ program ipabcstats, rclass
     	ENUMerator(name) [ENUMTeam(name)] 
     	BACKchecker(name) [BCTeam(name)]
 		[t1vars(namelist) t2vars(namelist) t3vars(namelist)] 
-    	okrange(str)
-    	[ttest(namelist) Level(real -1) signrank(namelist) prtest(namelist) RELiability(namelist)] 
+    	[okrange(str) NODIFFNum(numlist) NODIFFStr(string asis)]
+    	[ttest(namelist) signrank(namelist) prtest(namelist) RELiability(namelist) Level(real -1)] 
     	[showid(str)] 
     	[KEEPSUrvey(namelist) keepbc(namelist) full FILEname(str) replace] 
-    	[EXCLUDENum(numlist) EXCLUDEStr(str) EXCLUDEMISSing LOwer UPper NOSymbol TRim]
-    	[surveydate(name) bcdate(name)]
+    	[EXCLUDENum(numlist) EXCLUDEStr(str asis) EXCLUDEMISSing LOwer UPper NOSymbol TRim]
+    	surveydate(name) bcdate(name)
     ;
 	#d cr			
 		* check syntax
@@ -115,6 +115,41 @@ program ipabcstats, rclass
 				loc okrange = subinstr("`okrange'", ",", "", 1)		
 			}
 		}
+
+		* check specifications in nodiff vs exclude
+		if "`nodiffnum'" ~= "" & "`excludenum'" ~= "" {
+			loc nv_both: list nodiffnum | excludenum
+			if wordcount(`"`nodiffnum' `excludenum'"') > wordcount("`nv_both'") {
+				di as err `"value(s) "`nv_both'" not allowed in both nodiffnum() and excludenum()"'
+				ex 198
+			}
+		}
+
+		loc nodiffnum_list = subinstr(trim(itrim("`nodiffnum'")), " ", ",", .)
+		
+		if `"`nodiffstr'"' ~= "" & `"`excludestr'"' ~= "" {
+			loc nd_rest `"`nodiffstr'"'
+			loc c = 1
+			while `"`nd_rest'"' ~= "" {
+				gettoken nd_val nd_rest: nd_rest
+				loc ex_rest `"`excludestr'"'
+				while `"`ex_rest'"' ~= "" {
+					gettoken ex_val ex_rest: ex_rest
+					if "`nd_val'" == "`ex_val'" {
+						di as err `"value(s) "`ex_val'" not allowed in both nodiffstr() and excludestr()"'
+						ex 198
+					}
+				}
+
+				loc ++c
+				if `c' > 6 {
+					disp as err "expression too long. You can only specify a maximum of 6 strings with option nodiffstr()"
+					ex 130
+				}
+
+				loc nodiffstr_list = cond(`c' == 1, "`nd_val'", "`nodiffstr_list'" + ", " + "`nd_val'")
+			}
+		}
 		
 		* temp datasets and vars
 		tempfile _sdata _bdata _mdata _diffs _cdata _enumdata _enumteamdata _bcerdata _bcerteamdata _checks _fmdata
@@ -122,7 +157,7 @@ program ipabcstats, rclass
 		qui {
 			* import only relevant variables in survey dataset
 			use `id' `t1vars' `t2vars' `t3vars' `enumerator' `enumteam'  ///
-				`ttest' `signrank' `prtest' `reliability' `keepsurvey'	 ///
+				`ttest' `signrank' `prtest' `reliability' `keepsurvey' `surveydate' ///
 				using `surveydata', clear 
 
 			* check that datsets is unique on id
@@ -139,7 +174,19 @@ program ipabcstats, rclass
 				ex 198
 			}
 
+			* check survey and bbdates
+			foreach opt in surveydate bcdate {
+				cap confirm numeric var `opt'
+				if _rc == 7 {
+					di as err "Variable `opt' in option `opt'() must be a date formatted variable"
+					ex 7
+				}
+			}
+
 			* change string variables if applicable
+			unab t1vars: `t1vars'
+			unab t2vars: `t2vars'
+			unab t3vars: `t3vars'
 			unab tvars: `t1vars' `t2vars' `t3vars'
 			change_str `tvars', `nosymbol' `lower' `upper' `trim'
 
@@ -199,8 +246,32 @@ program ipabcstats, rclass
 				}
 
 				* unab check vars
+				if "`ttest'" ~= "" unab ttest: `ttest'
+				if "`prtest'" ~= "" unab prtest: `prtest'
+				if "`signrank'" ~= "" unab signrank: `signrank'
 				unab checkvars: `ttest' `prtest' `signrank' `reliability'
 				loc checkvars: list uniq checkvars
+
+				* check that vars specified in ttest, prtest and signrank are mutualy exclusive
+				if wordcount("`ttest' `prtest' `signrank'") > wordcount("`checkvars'") {
+					loc ttest_prtest: list ttest & prtest
+					loc ttest_signrank: list ttest & signrank
+					loc prtest_signrank: list prtest & signrank
+
+					if wordcount("`ttest_prtest'") > 0 {
+						di as err `"variable(s) "`ttest_prtest'" cannot be specified in both ttest and prtest"'
+						ex 198
+					}
+					if wordcount("`ttest_signrank'") > 0 {
+						di as err `"variable(s) "`ttest_signrank'" cannot be specified in both ttest and signrank"'
+						ex 198
+					}
+					if wordcount("`prtest_signrank'") > 0 {
+						di as err `"variable(s) "`prtest_signrank'" cannot be specified in both prtest and signrank"'
+						ex 198
+					}
+				}
+
 			}
 			
 			* unab survey list
@@ -227,7 +298,7 @@ program ipabcstats, rclass
 			
 			* import only relevant variables in bcdata
 			use `id' `t1vars' `t2vars' `t3vars' `backchecker' `bcteam'  ///
-				`ttest' `signrank' `prtest' `reliability' `keepbc'	 	///
+				`ttest' `signrank' `prtest' `reliability' `keepbc' `bcdate'	 	///
 				using `bcdata', clear
 
 			* check that datsets is unique on id
@@ -255,7 +326,7 @@ program ipabcstats, rclass
 			}
 
 			* add _bc prefix to backcheck dataset
-			foreach var of varlist `t1vars' `t2vars' `t3vars' `ttest' `signrank' `prtest' `reliability' `keepbc' {
+			foreach var of varlist `t1vars' `t2vars' `t3vars' `ttest' `signrank' `prtest' `reliability' `keepbc' `bcdate' {
 				* check that variables is not prefixed by _bc
 				if regexm("`var'", "^(_bc)") {
 					disp as error "variable `var' has illegal prefix _bc in backcheck data"
@@ -307,9 +378,9 @@ program ipabcstats, rclass
 
 			keep if inlist(_mergebc, 2, 3)
 
-			unab admin:			`id' `enumerator' `enumteam' `backchecker' `bcteam'
+			unab admin:			`id' `enumerator' `enumteam' `backchecker' `bcteam' `surveydate' _bc`bcdate'
 			save `_mdata', replace
-
+			
 			* keep data of number of survey back checked by enumerator and enumteam
 			keep `enumerator'
 			bys `enumerator': gen backchecks = _N
@@ -341,56 +412,102 @@ program ipabcstats, rclass
 				gen _vtype = cond(`:list var in t1vars', "type 1", cond(`:list var in t2vars', "type 2", "type 3"))
 				
 				* Mark variables that need to be compared
-				if "`nomiss'" ~= "" gen _compared = !missing(`var') & !missing(_bc`var')
+				if "`excludemissing'" ~= "" gen _compared = !missing(`var') & !missing(_bc`var')
 				else gen _compared = 1
+
+				* check change to not compared for values included EXCLUDENum
+				cap confirm numeric var `var' 
+				if !_rc {
+					if "`excludenum'" ~= "" {
+						loc exn_cnt = wordcount("`excludenum'")
+						forval x = 1/`exn_cnt' {
+							loc exn_val = word("`excludenum'", `x')
+							replace _compared = 0 if `var' == `exn_val' | _bc`var' == `exn_val'
+						}
+					}
+				}
+				else {
+					if `"`excludestr'"' ~= "" {
+						local rest `"`excludestr'"'
+						while `"`rest'"' ~= "" {
+							gettoken exs_val rest: rest
+							replace _compared = 0 if `var' == "`exs_val'" | _bc`var' == "`exs_val'"
+						}
+
+						gettoken val rest: rest,  
+					}
+				}
 
 				* generate variable to mark if values are different
 				gen _vdiff = `var' ~= _bc`var' if _compared == 1
-				gen _comp_comment = ""
 				
 				* For numeric vars: 
-					* Check that the variable has an okrange
-					* Check that there is at least one difference. 
-					* Apply okrange. Only display okrange 
-					cap confirm numeric var `var'
-					if !_rc {
-						* check that the variable has an okrange
-						if `:list var in okrvars_list' {
-							* check for range combination of var
-							forval j = 1/`=wordcount("`okrvars'")' {
-								loc okr_item = word("`okrvars'", `j') 
-								unab okr_item_list: `okr_item'
+				* Check that the variable has an okrange
+				* Check that there is at least one difference. 
+				* Apply okrange.
+				* apply nodiffnum
+				cap confirm numeric var `var'
+				if !_rc {
+					* check that the variable has an okrange
+					if `:list var in okrvars_list' {
+						* check for range combination of var
+						forval j = 1/`=wordcount("`okrvars'")' {
+							loc okr_item = word("`okrvars'", `j') 
+							unab okr_item_list: `okr_item'
+							
+							if `:list var in okr_item_list' {
 								
-								if `:list var in okr_item_list' {
-									
-									loc min = word("`okrmins'", `j') 
-									loc max = word("`okrmaxs'", `j') 
-									
-									* apply minimum and max okranges. 
-									* if relative, apply percentage
-									if regexm("`min'", "%$") {
-										loc perc = subinstr("`min'", "%", "", .)
-										loc perc = abs(float(`perc')/100)
-										gen _okmin = `var' - (`perc'*`var')
-									}
-									else gen _okmin = `min'
-									if regexm("`max'", "%$") {
-										loc perc = subinstr("`max'", "%", "", .)
-										loc perc = abs(float(`perc')/100)
-										gen _okmax = `var' + (`perc'*`var')
-									}
-									else gen _okmax = `max'
-
-									* replace comparison
-									replace _vdiff = 0 if _bc`var' >= float(_okmin) & _bc`var' <= float(_okmax) & !missing(_bc`var')
-									replace _comp_comment = "okrange is " + string(_okmin) + " to " + string(_okmax) if _compared
-
-									continue, break
+								loc min = word("`okrmins'", `j') 
+								loc max = word("`okrmaxs'", `j') 
+								
+								* apply minimum and max okranges. 
+								* if relative, apply percentage
+								if regexm("`min'", "%$") {
+									loc perc = subinstr("`min'", "%", "", .)
+									loc perc = abs(float(`perc')/100)
+									gen _okmin = `var' - (`perc'*`var')
 								}
-							}
+								else gen _okmin = `min'
+								if regexm("`max'", "%$") {
+									loc perc = subinstr("`max'", "%", "", .)
+									loc perc = abs(float(`perc')/100)
+									gen _okmax = `var' + (`perc'*`var')
+								}
+								else gen _okmax = `max'
 
+								* replace comparison
+								replace _vdiff = 0 if _bc`var' >= float(_okmin) & _bc`var' <= float(_okmax) & !missing(_bc`var')
+
+								continue, break
+							}
 						}
+
 					}
+
+					* apply nodiff
+					if "`nodiffnum'" ~= "" {
+						replace _vdiff = 0 if inlist(`var', `nodiffnum_list') & inlist(_bc`var', `nodiffnum_list')
+					}
+				}
+				else {
+					* apply nodiff for string variables
+					if `"`nodiffstr'"' ~= "" {
+						local rest "`nodiffstr_list'"
+						while `"`rest'"' ~= "" {
+							gettoken nds_val rest: rest, parse(,)
+							replace _vdiff = 0 if `var' == "`nds_val'" & _bc`var' == "`nds_val'"
+
+							loc ex_rest "`nodiffstr_list'"
+							while `"`ex_rest'"' ~= "" {
+								gettoken ndx_val ex_rest: ex_rest, parse(,)
+								replace _vdiff = 0 if inlist("`nds_val'", "`ndx_val'",  `var') &  inlist("`nds_val'", "`ndx_val'",  _bc`var')
+							}
+						}
+
+						gettoken val rest: rest, parse(,) 
+					}
+				}
+
 
 				* generate variable to hold variable name
 				gen _vvar = "`var'"
@@ -415,7 +532,7 @@ program ipabcstats, rclass
 				loc ++i
 				gen _seqid 	= _n 
 
-				keep `admin' `keepsurvey' `bc_keepbc' _v* _survey* _backcheck* _seq* _compared _comp_comment
+				keep `admin' `keepsurvey' `bc_keepbc' _v* _survey* _backcheck* _seq* _compared 
 				
 				append using `_diffs'
 				save `_diffs', replace
@@ -425,15 +542,15 @@ program ipabcstats, rclass
 			ren (_vtype _vvar _vvlab _survey _backcheck) ///
 				(type variable label survey backcheck)
 
-			cap ren (_surveylab _backchecklab _comp_comment) ///
-					(surveylabel backchecklabel comment)			
+			cap ren (_surveylab _backchecklab) ///
+					(surveylabel backchecklabel)			
 
 			* export comparison/differences
 			gen result = cond(_vdiff == ., "not compared", cond(!_vdiff, "not different", "different"))
 
 			cap gen surveylabel = ""
 			cap gen backchecklabel = ""
-			
+		
 			if "`full'" == "" keep if _vdiff == 1
 
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `keepsurvey' `bc_keepbc'
@@ -481,9 +598,6 @@ program ipabcstats, rclass
 				export excel using "`filename'", sheet("backchecker team stats", replace) first(varl) cell(B3)
 			}
 
-
-
-			
 		}	
 
 end
