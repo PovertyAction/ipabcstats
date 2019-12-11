@@ -45,12 +45,12 @@ program ipabcstats, rclass
     	ENUMerator(name) [ENUMTeam(name)] 
     	BACKchecker(name) [BCTeam(name)]
 		[t1vars(namelist) t2vars(namelist) t3vars(namelist)] 
-    	[okrange(str)]
-    	[ttest(namelist) Level(real -1) signrank(namelist) prtest(namelist) RELiability(namelist)] 
-    	[showid(str)] 
-    	[KEEPSUrvey(namelist) keepbc(namelist) full FILEname(str) replace] 
-    	[EXCLUDENum(numlist) EXCLUDEStr(str) EXCLUDEMISSing LOwer UPper NOSymbol TRim]
-    	surveydate(name) bcdate(name)
+   	[okrange(str) NODIFFNum(numlist) NODIFFStr(string asis)]
+   	[ttest(namelist) signrank(namelist) prtest(namelist) RELiability(namelist) Level(real -1)] 
+   	[showid(str)] 
+   	[KEEPSUrvey(namelist) keepbc(namelist) full FILEname(str) replace] 
+   	[EXCLUDENum(numlist) EXCLUDEStr(str asis) EXCLUDEMISSing LOwer UPper NOSymbol TRim]
+   	surveydate(name) bcdate(name)
     ;
 	#d cr			
 		* check syntax
@@ -175,6 +175,15 @@ program ipabcstats, rclass
 				ex 198
 			}
 
+			* check survey and bbdates
+			foreach opt in surveydate bcdate {
+				cap confirm numeric var `opt'
+				if _rc == 7 {
+					di as err "Variable `opt' in option `opt'() must be a date formatted variable"
+					ex 7
+				}
+			}
+
 			* change string variables if applicable
 			unab t1vars: `t1vars'
 			unab t2vars: `t2vars'
@@ -238,8 +247,32 @@ program ipabcstats, rclass
 				}
 
 				* unab check vars
+				if "`ttest'" ~= "" unab ttest: `ttest'
+				if "`prtest'" ~= "" unab prtest: `prtest'
+				if "`signrank'" ~= "" unab signrank: `signrank'
 				unab checkvars: `ttest' `prtest' `signrank' `reliability'
 				loc checkvars: list uniq checkvars
+
+				* check that vars specified in ttest, prtest and signrank are mutualy exclusive
+				if wordcount("`ttest' `prtest' `signrank'") > wordcount("`checkvars'") {
+					loc ttest_prtest: list ttest & prtest
+					loc ttest_signrank: list ttest & signrank
+					loc prtest_signrank: list prtest & signrank
+
+					if wordcount("`ttest_prtest'") > 0 {
+						di as err `"variable(s) "`ttest_prtest'" cannot be specified in both ttest and prtest"'
+						ex 198
+					}
+					if wordcount("`ttest_signrank'") > 0 {
+						di as err `"variable(s) "`ttest_signrank'" cannot be specified in both ttest and signrank"'
+						ex 198
+					}
+					if wordcount("`prtest_signrank'") > 0 {
+						di as err `"variable(s) "`prtest_signrank'" cannot be specified in both prtest and signrank"'
+						ex 198
+					}
+				}
+
 			}
 			
 			* unab survey list
@@ -266,7 +299,7 @@ program ipabcstats, rclass
 			
 			* import only relevant variables in bcdata
 			use `id' `t1vars' `t2vars' `t3vars' `backchecker' `bcteam'  ///
-				`ttest' `signrank' `prtest' `reliability' `keepbc' `bcdate'	///
+				`ttest' `signrank' `prtest' `reliability' `keepbc' `bcdate'	 	///
 				using `bcdata', clear
 
 			* check that datsets is unique on id
@@ -349,6 +382,7 @@ program ipabcstats, rclass
 
 			keep if inlist(_mergebc, 2, 3)
 
+
 			unab admin:	`id' `enumerator' `enumteam' `backchecker' `bcteam' `surveydate' `bcdate'
 			save `_mdata', replace
 
@@ -358,6 +392,7 @@ program ipabcstats, rclass
 			use `_mdata', clear
 			keep if _mergebc == 3
 			save `_mdata', replace 
+
 			* keep data of number of survey back checked by enumerator and enumteam
 			keep `enumerator'
 			bys `enumerator': gen backchecks = _N
@@ -389,12 +424,34 @@ program ipabcstats, rclass
 				gen _vtype = cond(`:list var in t1vars', "type 1", cond(`:list var in t2vars', "type 2", "type 3"))
 				
 				* Mark variables that need to be compared
-				if "`nomiss'" ~= "" gen _compared = !missing(`var') & !missing(_bc`var')
+				if "`excludemissing'" ~= "" gen _compared = !missing(`var') & !missing(_bc`var')
 				else gen _compared = 1
+
+				* check change to not compared for values included EXCLUDENum
+				cap confirm numeric var `var' 
+				if !_rc {
+					if "`excludenum'" ~= "" {
+						loc exn_cnt = wordcount("`excludenum'")
+						forval x = 1/`exn_cnt' {
+							loc exn_val = word("`excludenum'", `x')
+							replace _compared = 0 if `var' == `exn_val' | _bc`var' == `exn_val'
+						}
+					}
+				}
+				else {
+					if `"`excludestr'"' ~= "" {
+						local rest `"`excludestr'"'
+						while `"`rest'"' ~= "" {
+							gettoken exs_val rest: rest
+							replace _compared = 0 if `var' == "`exs_val'" | _bc`var' == "`exs_val'"
+						}
+
+						gettoken val rest: rest,  
+					}
+				}
 
 				* generate variable to mark if values are different
 				gen _vdiff = `var' ~= _bc`var' if _compared == 1
-				gen _comp_comment = ""
 				
 				* For numeric vars: 
 				* Check that the variable has an okrange
@@ -411,7 +468,7 @@ program ipabcstats, rclass
 							unab okr_item_list: `okr_item'
 							
 							if `:list var in okr_item_list' {
-								
+
 								loc min = word("`okrmins'", `j') 
 								loc max = word("`okrmaxs'", `j') 
 								
@@ -421,6 +478,7 @@ program ipabcstats, rclass
 									loc perc = subinstr("`min'", "%", "", .)
 									loc perc = abs(float(`perc')/100)
 									gen _okmin = `var' - (`perc'*`var')
+
 								}
 								else gen _okmin = `min'
 								if regexm("`max'", "%$") {
@@ -428,6 +486,7 @@ program ipabcstats, rclass
 									loc perc = abs(float(`perc')/100)
 									gen _okmax = `var' + (`perc'*`var')
 								}
+
 								else gen _okmax = `max'
 
 								* replace comparison
@@ -496,8 +555,8 @@ program ipabcstats, rclass
 			ren (_vtype _vvar _vvlab _survey _backcheck) ///
 				(type variable label survey backcheck)
 
-			cap ren (_surveylab _backchecklab _comp_comment) ///
-					(surveylabel backchecklabel comment)			
+			cap ren (_surveylab _backchecklab) ///
+					(surveylabel backchecklabel)			
 
 			* create days difference variable
 			gen _surveyday = dofc(`surveydate')
@@ -673,9 +732,6 @@ program ipabcstats, rclass
 				export excel using "`filename'", sheet("backchecker team stats", replace) first(varl) cell(B3)
 			}
 
-
-
-			
 		}	
 
 end
