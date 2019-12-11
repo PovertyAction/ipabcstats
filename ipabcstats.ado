@@ -677,7 +677,7 @@ program ipabcstats, rclass
 			gen error_rate_total = round((_vdifftotal / valcounttotal) * 100, 0.01)
 			lab var error_rate_total "Total" 
 
-
+			graph drop _all
 			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") scheme(s1color) name(summary) ytitle("%")
 			graph export errorrates.png, width(460) replace name(summary)
 			graph close
@@ -723,12 +723,13 @@ program ipabcstats, rclass
 			loc lab = substr("`bcdate'", 4, .)
 			lab var `bcdate' "`lab'"
 
-			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `keepsurvey' `surveydate' `bcdate' days ///
+			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey'
+			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey'  ///
 				using "`filename'", sheet("comparison") first(varl) cell(B4)
 			
 			if "`bc_keepbc'" ~= "" {
 				
-				unab exp_vars: `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `keepsurvey' `surveydate' `bcdate' days
+				unab exp_vars: `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' 
 				loc range_cnt = wordcount("`exp_vars'")
 
 				mata: st_local("alphavar", invtokens(numtobase26(`=`range_cnt'+2')))
@@ -736,7 +737,7 @@ program ipabcstats, rclass
 				keep `bc_keepbc'
 				ren _bc* *
 		
-				export excel using "`filename'", sheet("comparison", modify) first(var) cell(`alphavar'3)
+				export excel using "`filename'", sheet("comparison", modify) first(var) cell(`alphavar'4)
 			}
 			
 			use `_cdata', clear
@@ -1090,8 +1091,8 @@ void format_comparison(string scalar filename, string scalar sheetname)
 
 	b.set_sheet_merge(sheetname, (2, 2), (respos, respos+2))
 
-	b.set_top_border((4, 5), (2, respos + 2), "medium")
-	b.set_bottom_border(nrows, (2, keepbcpos), "medium")
+	b.set_top_border((4, 5), (2, keepbcpos-1), "medium")
+	b.set_bottom_border(nrows, (2, keepbcpos-1), "medium")
 	
 	b.put_string(3, respos, "Survey")
 	b.put_string(3, respos + 1, "Backcheck")
