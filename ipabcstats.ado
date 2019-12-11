@@ -36,7 +36,7 @@ Wishlist:
 program ipabcstats, rclass
     version 	14.2
     cap version 15.1 /* written in stata 15.1 but will run on stata 14.2 */ 
-	set graphics off
+	set graphics on
    
     #d;
     syntax, 																			
@@ -153,7 +153,7 @@ program ipabcstats, rclass
 		}
 		
 		* temp datasets and vars
-		tempfile _sdata _bdata _mdata _diffs _cdata _enumdata _enumteamdata _bcerdata _bcerteamdata _checks _fmdata _bconly
+		tempfile _sdata _bdata _mdata _diffs _cdata _enumdata _enumteamdata _bcerdata _bcerteamdata _checks _fmdata _bconly _bcavgdata _bcteamavgdata
 
 		qui {
 			* import only relevant variables in survey dataset
@@ -411,6 +411,27 @@ program ipabcstats, rclass
 				save `_enumteamdata', replace
 			}
 
+			* calculate average days between surveys and back checks bcers
+			use `_mdata', clear
+			keep `backchecker' `surveydate' `bcdate'
+			gen days = dofc(`bcdate') - dofc(`surveydate')
+			order `backchecker' days
+			collapse (mean) days, by (`backchecker')
+			lab var days "average days"
+			save `_bcavgdata'
+
+
+			* calculate average days between surveys and back checks for bcer teams
+			if "`bcteam'" ~= "" {
+				use `_mdata', clear
+				keep `bcteam' `surveydate' `bcdate'
+				gen days = dofc(`bcdate') - dofc(`surveydate')
+				order `bcteam' days
+				collapse (mean) days, by (`bcteam')
+				lab var days "average days"
+				save `_bcteamavgdata'
+			}
+
 			* foreach variable compare and save comparison in long format
 			clear
 			save `_diffs', emptyok
@@ -642,18 +663,18 @@ program ipabcstats, rclass
 
 
 			forval i = 1/3 {
-				gen error_rate`i' = _vdiff`i'/valcount`i', after(_vdiff`i')
+				gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
 				lab var error_rate`i' "Type `i'"
 			}
 
 
 			egen valcounttotal = rowtotal(valcount1 valcount2 valcount3)
 			egen _vdifftotal = rowtotal(_vdiff1 _vdiff2 _vdiff3)
-			gen error_rate_total = _vdifftotal / valcounttotal
+			gen error_rate_total = round((_vdifftotal / valcounttotal) * 100, 0.01)
 			lab var error_rate_total "Total" 
 
 
-			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") scheme(s1color) name(summary)
+			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") scheme(s1color) name(summary) ytitle("%")
 			graph export errorrates.png, width(460) replace name(summary)
 			drop error_rate*
 			reshape long _vdiff valcount, i(`unit') j(vartype)
@@ -717,9 +738,17 @@ program ipabcstats, rclass
 			gen _a = "", before(`id')
 			unab id: `id'
 
-			* mata: adjust_column_width("`filename'", "comparison")
-			* mata: format_comparison("`filename'", "comparison", `:word count `id'', `:word count `keepsurvey'', `:word count `keepbc'')
-			
+
+			mata: adjust_column_width("`filename'", "comparison")
+
+			loc idcount `:word count `id''
+			loc enumcount `:word count `enumerator' `enumteam''
+			loc bcer `:word count `backchecker' `bcteam''
+			loc keeps `: word count `keepsurvey''
+			loc keepb `:word count `keepbc''
+
+			mata: format_comparison("`filename'", "comparison")
+
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator) 
 			export excel using "`filename'", sheet("enumerator stats", replace) first(varl) cell(B3)
@@ -730,10 +759,14 @@ program ipabcstats, rclass
 			}
 
 			create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(backchecker)
+			merge 1:1 `backchecker' using `_bcavgdata', nogen
+			order days, after(backchecks)
 			export excel using "`filename'", sheet("backchecker stats", replace) first(varl) cell(B3)
 
 			if "`bcteam'" ~= "" {
 				create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(bc team)
+				merge 1:1 `bcteam' using `_bcteamavgdata', nogen
+				order days, after(backchecks)
 				export excel using "`filename'", sheet("backchecker team stats", replace) first(varl) cell(B3)
 			}
 
@@ -967,7 +1000,7 @@ void adjust_column_width(string scalar filename, string scalar sheetname)
 	real scalar column_width, columns, ncols, nrows, i, colmaxval
 
 	ncols = st_nvar()
-	nrows = st_nobs() + 2
+	nrows = st_nobs() + 4
 
 	b = xl()
 
@@ -976,21 +1009,16 @@ void adjust_column_width(string scalar filename, string scalar sheetname)
 	b.set_mode("open")
 
 	for (i = 1;i <= ncols;i ++) {
-		namelen = strlen(st_varname(i))
 		
-		if (st_isnumvar(i)) {
-			colmaxval = colmax(st_data(., i))
-			
-			if (colmaxval == 0) {
-				collen = 0
-			}
-			else {
-				collen = log(colmax(st_data(., i)))
-			}
+		if (st_varname(i) == "days") {
+			namelen = 12
 		}
+		
 		else {
-			collen = colmax(strlen(st_sdata(., i)))
+			namelen = strlen(st_varname(i))
 		}
+
+		collen = colmax(strlen(st_sdata(., i)))
 		
 		if (namelen > collen) {
 			column_width = namelen + 1
@@ -1005,8 +1033,9 @@ void adjust_column_width(string scalar filename, string scalar sheetname)
 		
 		b.set_column_width(i, i, column_width)
 
-		b.close_book()
 	}
+		b.close_book()
+
 }
 
 void add_summary_formatting(string scalar filename, string scalar sheetname, string scalar date) 
@@ -1077,4 +1106,3 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 
 
 end
-
