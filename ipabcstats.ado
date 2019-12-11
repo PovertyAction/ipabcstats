@@ -40,7 +40,7 @@ cap program drop create_stats
 program ipabcstats, rclass
     version 	14.2
     cap version 15.1 /* written in stata 15.1 but will run on stata 14.2 */ 
-	set graphics off
+	set graphics on
    
     #d;
     syntax, 																			
@@ -659,6 +659,7 @@ program ipabcstats, rclass
 
 			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") scheme(s1color) name(summary)
 			graph export errorrates.png, width(460) replace name(summary)
+			graph close
 			drop error_rate*
 			reshape long _vdiff valcount, i(`unit') j(vartype)
 
@@ -1041,7 +1042,8 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	b.load_book(filename)
 	b.set_sheet(sheetname)
 	b.set_mode("open")
-	b.set_sheet_gridlines(sheetname, "off")
+
+	nrows = st_nobs() + 4 
 	idpos = 2 + strtoreal(st_local("idcount"))
 	enumpos = idpos + strtoreal(st_local("enumcount"))
 	bcerpos = enumpos + strtoreal(st_local("bcer"))
@@ -1053,18 +1055,29 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	keepspos = datepos + strtoreal(st_local("keeps"))
 	keepbcpos = keepspos + strtoreal(st_local("keepb"))
 
-	nrows = 2821 
 
 	positions = (idpos\enumpos\bcerpos\varpos\spos\bcpos\respos\datepos\keepspos\keepbcpos)
 	positions
 	
+	
 	b.set_left_border((4, nrows), 2, "medium")
 	
 	for (i = 1; i<=10; i++) {
-		b.set_left_border((4, 2821), positions[i], "medium")
+		b.set_left_border((4, nrows), positions[i], "medium")
 	}
 
+	b.set_sheet_merge(sheetname, (2, 2), (respos, respos+2))
 
+	b.set_top_border((4, 5), (2, respos + 2), "medium")
+	b.set_bottom_border(nrows, (2, keepbcpos), "medium")
+	
+	b.put_string(3, respos, "Survey")
+	b.put_string(3, respos + 1, "Backcheck")
+	b.put_string(3, respos + 2, "Difference")
+	b.put_string(2, respos, "Dates")
+
+	b.set_border((2, 3), (respos, respos + 2), "medium")
+	b.set_horizontal_align((2, 3), (respos, respos + 2), "center")
 
 	b.close_book()
 
@@ -1073,3 +1086,8 @@ void format_comparison(string scalar filename, string scalar sheetname)
 
 end
 
+/*	for (i = 1, i <= 10, i+2) {
+		b.set_sheet_merge(sheetname, ())
+	} */
+
+	
