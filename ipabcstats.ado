@@ -50,7 +50,7 @@ program ipabcstats, rclass
     	[showid(str)] 
     	[KEEPSUrvey(namelist) keepbc(namelist) full FILEname(str) replace] 
     	[EXCLUDENum(numlist) EXCLUDEStr(str) EXCLUDEMISSing LOwer UPper NOSymbol TRim]
-    	[surveydate(name) bcdate(name)]
+    	surveydate(name) bcdate(name)
     ;
 	#d cr			
 		* check syntax
@@ -114,6 +114,41 @@ program ipabcstats, rclass
 				
 				loc okrange = subinstr("`okrange'", "`okrvar'`okrcomb'", "", 1)
 				loc okrange = subinstr("`okrange'", ",", "", 1)		
+			}
+		}
+
+		* check specifications in nodiff vs exclude
+		if "`nodiffnum'" ~= "" & "`excludenum'" ~= "" {
+			loc nv_both: list nodiffnum | excludenum
+			if wordcount(`"`nodiffnum' `excludenum'"') > wordcount("`nv_both'") {
+				di as err `"value(s) "`nv_both'" not allowed in both nodiffnum() and excludenum()"'
+				ex 198
+			}
+		}
+
+		loc nodiffnum_list = subinstr(trim(itrim("`nodiffnum'")), " ", ",", .)
+		
+		if `"`nodiffstr'"' ~= "" & `"`excludestr'"' ~= "" {
+			loc nd_rest `"`nodiffstr'"'
+			loc c = 1
+			while `"`nd_rest'"' ~= "" {
+				gettoken nd_val nd_rest: nd_rest
+				loc ex_rest `"`excludestr'"'
+				while `"`ex_rest'"' ~= "" {
+					gettoken ex_val ex_rest: ex_rest
+					if "`nd_val'" == "`ex_val'" {
+						di as err `"value(s) "`ex_val'" not allowed in both nodiffstr() and excludestr()"'
+						ex 198
+					}
+				}
+
+				loc ++c
+				if `c' > 6 {
+					disp as err "expression too long. You can only specify a maximum of 6 strings with option nodiffstr()"
+					ex 130
+				}
+
+				loc nodiffstr_list = cond(`c' == 1, "`nd_val'", "`nodiffstr_list'" + ", " + "`nd_val'")
 			}
 		}
 		
@@ -362,48 +397,71 @@ program ipabcstats, rclass
 				gen _comp_comment = ""
 				
 				* For numeric vars: 
-					* Check that the variable has an okrange
-					* Check that there is at least one difference. 
-					* Apply okrange. Only display okrange 
-					cap confirm numeric var `var'
-					if !_rc {
-						* check that the variable has an okrange
-						if `:list var in okrvars_list' {
-							* check for range combination of var
-							forval j = 1/`=wordcount("`okrvars'")' {
-								loc okr_item = word("`okrvars'", `j') 
-								unab okr_item_list: `okr_item'
+				* Check that the variable has an okrange
+				* Check that there is at least one difference. 
+				* Apply okrange.
+				* apply nodiffnum
+				cap confirm numeric var `var'
+				if !_rc {
+					* check that the variable has an okrange
+					if `:list var in okrvars_list' {
+						* check for range combination of var
+						forval j = 1/`=wordcount("`okrvars'")' {
+							loc okr_item = word("`okrvars'", `j') 
+							unab okr_item_list: `okr_item'
+							
+							if `:list var in okr_item_list' {
 								
-								if `:list var in okr_item_list' {
-									
-									loc min = word("`okrmins'", `j') 
-									loc max = word("`okrmaxs'", `j') 
-									
-									* apply minimum and max okranges. 
-									* if relative, apply percentage
-									if regexm("`min'", "%$") {
-										loc perc = subinstr("`min'", "%", "", .)
-										loc perc = abs(float(`perc')/100)
-										gen _okmin = `var' - (`perc'*`var')
-									}
-									else gen _okmin = `min'
-									if regexm("`max'", "%$") {
-										loc perc = subinstr("`max'", "%", "", .)
-										loc perc = abs(float(`perc')/100)
-										gen _okmax = `var' + (`perc'*`var')
-									}
-									else gen _okmax = `max'
-
-									* replace comparison
-									replace _vdiff = 0 if _bc`var' >= float(_okmin) & _bc`var' <= float(_okmax) & !missing(_bc`var')
-									replace _comp_comment = "okrange is " + string(_okmin) + " to " + string(_okmax) if _compared
-
-									continue, break
+								loc min = word("`okrmins'", `j') 
+								loc max = word("`okrmaxs'", `j') 
+								
+								* apply minimum and max okranges. 
+								* if relative, apply percentage
+								if regexm("`min'", "%$") {
+									loc perc = subinstr("`min'", "%", "", .)
+									loc perc = abs(float(`perc')/100)
+									gen _okmin = `var' - (`perc'*`var')
 								}
-							}
+								else gen _okmin = `min'
+								if regexm("`max'", "%$") {
+									loc perc = subinstr("`max'", "%", "", .)
+									loc perc = abs(float(`perc')/100)
+									gen _okmax = `var' + (`perc'*`var')
+								}
+								else gen _okmax = `max'
 
+								* replace comparison
+								replace _vdiff = 0 if _bc`var' >= float(_okmin) & _bc`var' <= float(_okmax) & !missing(_bc`var')
+
+								continue, break
+							}
 						}
+
 					}
+
+					* apply nodiff
+					if "`nodiffnum'" ~= "" {
+						replace _vdiff = 0 if inlist(`var', `nodiffnum_list') & inlist(_bc`var', `nodiffnum_list')
+					}
+				}
+				else {
+					* apply nodiff for string variables
+					if `"`nodiffstr'"' ~= "" {
+						local rest "`nodiffstr_list'"
+						while `"`rest'"' ~= "" {
+							gettoken nds_val rest: rest, parse(,)
+							replace _vdiff = 0 if `var' == "`nds_val'" & _bc`var' == "`nds_val'"
+
+							loc ex_rest "`nodiffstr_list'"
+							while `"`ex_rest'"' ~= "" {
+								gettoken ndx_val ex_rest: ex_rest, parse(,)
+								replace _vdiff = 0 if inlist("`nds_val'", "`ndx_val'",  `var') &  inlist("`nds_val'", "`ndx_val'",  _bc`var')
+							}
+						}
+
+						gettoken val rest: rest, parse(,) 
+					}
+				}
 
 				* generate variable to hold variable name
 				gen _vvar = "`var'"
