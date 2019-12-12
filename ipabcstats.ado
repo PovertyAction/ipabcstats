@@ -768,7 +768,8 @@ program ipabcstats, rclass
 			loc bcer `:word count `backchecker' `bcteam''
 			loc keeps `: word count `keepsurvey''
 			loc keepb `:word count `keepbc''
-			if `=_N' < 3000 mata: format_comparison("`filename'", "comparison")
+
+			mata: format_comparison("`filename'", "comparison")
 			mata: adjust_column_width("`filename'", "comparison")
 			
 			* create and export enumerator and bcer statistics
@@ -1109,13 +1110,14 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	positions = (idpos\enumpos\bcerpos\varpos\spos\bcpos\respos\datepos\keepspos\keepbcpos)
 	positions
 	
-	
-	b.set_left_border((4, nrows), 2, "medium")
-	
-	for (i = 1; i<=10; i++) {
-		b.set_left_border((4, nrows), positions[i], "medium")
+	if (nrows < 3000) {
+		b.set_left_border((4, nrows), 2, "medium")
+		
+		for (i = 1; i<=10; i++) {
+			b.set_left_border((4, nrows), positions[i], "medium")
+		}
 	}
-
+	
 	b.set_sheet_merge(sheetname, (2, 2), (respos, respos+2))
 
 	if (strtoreal(st_local("keeps")) > 0) {
@@ -1128,21 +1130,25 @@ void format_comparison(string scalar filename, string scalar sheetname)
 		b.put_string(3, keepspos, "Keep in Backcheck")
 	}
 
-	b.set_top_border((4, 5), (2, keepbcpos-1), "medium")
-	b.set_bottom_border(nrows, (2, keepbcpos-1), "medium")
-	
+	if (nrows < 3000) {
+		b.set_top_border((4, 5), (2, keepbcpos-1), "medium")
+		b.set_bottom_border(nrows, (2, keepbcpos-1), "medium")
+		
+
+		lastcol = respos
+		if (strtoreal(st_local("keepbc")) > 0) {
+			lastcol = keepbcpos - 1
+		}
+		b.set_border(3, (respos, lastcol), "medium")
+	}
+
+	b.set_horizontal_align((2, 3), (respos, keepbcpos), "center")
+	b.set_font_bold((2,4), (2, keepbcpos), "on")
+
 	b.put_string(3, respos, "Survey")
 	b.put_string(3, respos + 1, "Backcheck")
 	b.put_string(3, respos + 2, "Difference")
 	b.put_string(2, respos, "Dates")
-
-	lastcol = respos
-	if (strtoreal(st_local("keepbc")) > 0) {
-		lastcol = keepbcpos - 1
-	}
-	b.set_border(3, (respos, lastcol), "medium")
-	b.set_horizontal_align((2, 3), (respos, keepbcpos), "center")
-	b.set_font_bold((2,4), (2, keepbcpos), "on")
 
 	b.close_book()
 
