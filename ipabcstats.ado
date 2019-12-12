@@ -722,8 +722,8 @@ program ipabcstats, rclass
 			lab var `surveydate' "`surveydate'"
 			loc lab = substr("`bcdate'", 4, .)
 			lab var `bcdate' "`lab'"
-
-			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey'
+set trace on
+			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey'  ///
 				using "`filename'", sheet("comparison") first(varl) cell(B4)
 			
@@ -741,6 +741,7 @@ program ipabcstats, rclass
 			}
 			
 			use `_cdata', clear
+			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			gen _a = "", before(`id')
 			unab id: `id'
 
@@ -754,7 +755,7 @@ program ipabcstats, rclass
 
 			mata: format_comparison("`filename'", "comparison")
 			mata: adjust_column_width("`filename'", "comparison")
-
+			pause
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator) 
 			export excel using "`filename'", sheet("enumerator stats", replace) first(varl) cell(B3)
@@ -961,14 +962,15 @@ void adjust_column_width(string scalar filename, string scalar sheetname)
 			namelen = 12
 		}
 		
-		else if (st_varname(i) == st_local("surveydate") | st_varname(i) == st_local("bcdate") | st_varname(i) == "starttime" | st_varname(i) == "endtime" | st_varname(i) == "submissiondate" | st_varname(i) == "_bcstarttime" | st_varname(i) == "_bcendtime" | st_varname(i) == "_bcsubmissiondate") {
-			namelen = 16
-		} 
-
 		else {
 			namelen = strlen(st_varname(i))
 		}
+		
+		if (st_varname(i) == st_local("surveydate") | st_varname(i) == st_local("bcdate") | st_varname(i) == "starttime" | st_varname(i) == "endtime" | st_varname(i) == "submissiondate" | st_varname(i) == "_bcstarttime" | st_varname(i) == "_bcendtime" | st_varname(i) == "_bcsubmissiondate") {
+			namelen = 16
+		} 
 
+		
 		collen = colmax(strlen(st_sdata(., i)))
 		
 		if (namelen > collen) {
@@ -1122,7 +1124,8 @@ void format_comparison(string scalar filename, string scalar sheetname)
 		lastcol = keepbcpos - 1
 	}
 	b.set_border(3, (respos, lastcol), "medium")
-	b.set_horizontal_align((2, 3), (respos, respos + 2), "center")
+	b.set_horizontal_align((2, 3), (respos, keepbcpos), "center")
+	b.set_font_bold((2,4), (2, keepbcpos), "on")
 
 	b.close_book()
 
