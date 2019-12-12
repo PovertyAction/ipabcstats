@@ -768,8 +768,7 @@ program ipabcstats, rclass
 			loc bcer `:word count `backchecker' `bcteam''
 			loc keeps `: word count `keepsurvey''
 			loc keepb `:word count `keepbc''
-
-			mata: format_comparison("`filename'", "comparison")
+			if `=_N' < 3000 mata: format_comparison("`filename'", "comparison")
 			mata: adjust_column_width("`filename'", "comparison")
 			
 			* create and export enumerator and bcer statistics
