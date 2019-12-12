@@ -49,12 +49,13 @@ program ipabcstats, rclass
     	ENUMerator(name) [ENUMTeam(name)] 
     	BACKchecker(name) [BCTeam(name)]
 		[t1vars(namelist) t2vars(namelist) t3vars(namelist)] 
-   	[okrange(str) NODIFFNum(numlist) NODIFFStr(string asis)]
-   	[ttest(namelist) signrank(namelist) prtest(namelist) RELiability(namelist) Level(real -1)] 
-   	[showid(str)] 
-   	[KEEPSUrvey(namelist) keepbc(namelist) full FILEname(str) replace] 
-   	[EXCLUDENum(numlist) EXCLUDEStr(str asis) EXCLUDEMISSing LOwer UPper NOSymbol TRim NOLabel]
-   	surveydate(name) bcdate(name)
+	   	[okrange(str) NODIFFNum(numlist) NODIFFStr(string asis)]
+	   	[ttest(namelist) signrank(namelist) prtest(namelist) RELiability(namelist) Level(real -1)] 
+	   	[showid(str)] 
+	   	FILEname(str) [replace]
+	   	[KEEPSUrvey(namelist) keepbc(namelist) full] 
+	   	[EXCLUDENum(numlist) EXCLUDEStr(str asis) EXCLUDEMISSing LOwer UPper NOSymbol TRim NOLabel]
+	   	surveydate(name) bcdate(name)
     ;
 	#d cr			
 
@@ -796,6 +797,9 @@ program ipabcstats, rclass
 			loc bcer `:word count `backchecker' `bcteam''
 			loc keeps `: word count `keepsurvey''
 			loc keepb `:word count `keepbc''
+			loc t1 = cond("`t1vars'" ~= "", 1, 0)
+			loc t2 = cond("`t2vars'" ~= "", 1, 0)
+			loc t3 = cond("`t3vars'" ~= "", 1, 0)
 
 			mata: format_comparison("`filename'", "comparison")
 			mata: adjust_column_width("`filename'", "comparison")
@@ -803,29 +807,41 @@ program ipabcstats, rclass
 
 			
 			* create and export enumerator and bcer statistics
-			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator) 
+			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator)  `nolabel'
+			gsort -error_rate -error_rate1 -error_rate2 -error_rate3
 			export excel using "`filename'", sheet("enumerator stats", replace) first(varl) cell(B3)
-
+			gen _a = "", before(`enumerator')
+			mata: format_enumstats("`filename'", "enumerator stats", "`enumerator'", 0)
+			
 			if "`enumteam'" ~= "" {
-				create_stats using "`_diffs'", enum(`enumteam') enumdata("`_enumteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enum team)
+				create_stats using "`_diffs'", enum(`enumteam') enumdata("`_enumteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enum team) `nolabel'
+				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
 				export excel using "`filename'", sheet("enumerator team stats", replace) first(varl) cell(B3)
+				gen _a = "", before(`enumteam')
+				mata: format_enumstats("`filename'", "enumerator team stats", "`enumteam'", 0)
 			}
-
-			create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(backchecker)
+			
+			create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(backchecker) `nolabel'
 			merge 1:1 `backchecker' using `_bcavgdata', nogen
 			order days, after(backchecks)
+			gsort -error_rate -error_rate1 -error_rate2 -error_rate3
 			export excel using "`filename'", sheet("backchecker stats", replace) first(varl) cell(B3)
+			gen _a = ""
+			mata: format_enumstats("`filename'", "backchecker stats", "`backchecker'", 1)
 
 			if "`bcteam'" ~= "" {
-				create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(bc team)
+				create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(bc team) `nolabel'
 				merge 1:1 `bcteam' using `_bcteamavgdata', nogen
 				order days, after(backchecks)
+				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
 				export excel using "`filename'", sheet("backchecker team stats", replace) first(varl) cell(B3)
+				gen _a = ""
+				mata: format_enumstats("`filename'", "backchecker team stats", "`bcteam'", 1)
 			}
 
 		}	
 
-use `_originaldata', clear
+	use `_originaldata', clear
 
 end
 
@@ -865,7 +881,7 @@ end
 
 * create_stats: program to aggregate and create stats for enum and bcer
 program define create_stats, rclass
-	syntax using/, enum(name) type(name) enumdata(string) compared(name) different(name) enumlabel(string) [bc]
+	syntax using/, enum(name) type(name) enumdata(string) compared(name) different(name) enumlabel(string) [bc nolabel] 
 
 	use `using', clear
 
@@ -878,7 +894,7 @@ program define create_stats, rclass
 	if "`bc'" == "" {
 		order `enum' surveys backchecks
 		* generate back check percentage and backcheck error rates
-		gen backcheck_percent = round((backchecks/surveys) * 100, 0.01), after(backchecks)
+		gen backcheck_percent = backchecks/surveys, after(backchecks)
 		label var backcheck_percent "% backchecked"
 	}
 	else order `enum' backchecks
@@ -887,7 +903,7 @@ program define create_stats, rclass
 	forval i = 1/3 {
 		cap confirm var compared`i'
 		if !_rc {
-			gen error_rate`i' = round((differences`i'/compared`i') * 100, 0.01), after(differences`i')
+			gen error_rate`i' = differences`i'/compared`i', after(differences`i')
 			label var compared`i' "# compared"
 			label var differences`i' "# different"
 			label var error_rate`i' "% different"
@@ -902,9 +918,17 @@ program define create_stats, rclass
 	label var compared "# compared"
 	egen differences = rowtotal(differences*)
 	label var differences "# different"
-	gen error_rate = round((differences/compared) * 100, 0.01)
+	gen error_rate = differences/compared
 	label var error_rate "% different"
 	label var `enum' "`enumlabel'"
+
+	* change enumerator var to string labels if nolabel is not specified
+	if "`nolabel'" ~= "" {
+		decode `enum', gen (`enum'_new)
+		order `enum'_new, after(`enum')
+		drop `enum'
+		ren `enum'_new `enum'
+	}
 	
 	ds `enum', not
 	recode `r(varlist)' (. = 0) // recode missing/no comparisons to 0
@@ -922,7 +946,7 @@ end
 mata:
 mata clear
 
-void format_enumstats(string scalar filename, string scalar sheetname, real scalar type1, real scalar type2, real scalar type3)
+void format_enumstats(string scalar filename, string scalar sheetname, string scalar enumvar, real scalar bc)
 {
 
 	class xl scalar b
@@ -930,10 +954,6 @@ void format_enumstats(string scalar filename, string scalar sheetname, real scal
 
 	ncols = st_nvar()
 	nrows = st_nobs() + 2
-	current_col = 6
-
-	ncols
-	nrows
 
 	b = xl()
 
@@ -941,50 +961,57 @@ void format_enumstats(string scalar filename, string scalar sheetname, real scal
 	b.set_sheet(sheetname)
 	b.set_mode("open")
 
-	b.set_sheet_gridlines(sheetname, "off")
-	b.set_border((3, nrows + 1), (2, ncols), "thin")
 	b.set_top_border(3, (2, ncols), "medium")
 	b.set_bottom_border(3, (2, ncols), "medium")
 	b.set_bottom_border(nrows + 1, (2, ncols), "medium")
 	b.set_left_border((3, nrows + 1), 2, "medium")
 	b.set_right_border((3, nrows + 1), 2, "medium")
-	b.set_right_border((3, nrows + 1), 5, "medium")
+	b.set_right_border((3, nrows + 1), ncols, "medium")
 	b.set_column_width(1, 1, 1)
 	b.set_row_height(1, 1, 10)
 
-	if (type1 = 1) {
-		b.set_sheet_merge(sheetname, (2, 2), (current_col, current_col + 2))
-		b.set_left_border((3, nrows + 1), current_col + 3, "medium")
-		b.put_string(2, current_col, "type 1")
-		b.set_horizontal_align(2, current_col, "center")
-
-		current_col = current_col + 3
+	collen = colmax(strlen(st_sdata(., enumvar)))
+	if (collen > 12) {
+		b.set_column_width(2, 2, collen)
+	}
+	else {
+		b.set_column_width(2, 2, 12)
 	}
 
-	if (type2 = 1) {
-		b.set_sheet_merge(sheetname, (2, 2), (current_col, current_col + 2))
-		b.set_left_border((3, nrows + 1), current_col + 3, "medium")
-		b.put_string(2, current_col, "type 2")
-		b.set_horizontal_align(2, current_col, "center")
-
-		current_col = current_col + 3
+	b.set_column_width(3, ncols, 14)
+	b.set_horizontal_align((3, nrows + 1), (3, ncols), "center")
+	
+	if (bc == 1) {
+		current_col = 4
+		b.set_number_format((4, nrows + 1), 4, "number_d2")
+		b.set_border(2, (5, ncols), "medium")
+	}	
+	else {
+		current_col = 5
+		b.set_number_format((4, nrows + 1), 5, "percent_d2")
+		b.set_border(2, (6, ncols), "medium")
 	}
 
-	if (type3 = 1) {
-		b.set_sheet_merge(sheetname, (2, 2), (current_col, current_col + 2))
-		b.set_left_border((3, nrows + 1), current_col + 3, "medium")
-		b.put_string(2, current_col, "type 3")
-		b.set_horizontal_align(2, current_col, "center")
-
-		current_col = current_col + 3
+	b.set_right_border((3, nrows + 1), current_col, "medium")
+	
+	for (i = 1; i <= 3; i++) {
+		if (st_local("t" + strofreal(i)) == "1") {
+			current_col = current_col + 3
+			b.set_right_border((3, nrows + 1), current_col, "medium")
+			b.set_number_format((4, nrows + 1), current_col, "percent_d2")
+			b.set_sheet_merge(sheetname, (2, 2), (current_col - 2, current_col))
+			b.put_string(2, current_col -2, "type " + strofreal(i))
+		}
 	}
 
-	b.set_sheet_merge(sheetname, (2, 2), (current_col, current_col + 2))
-	b.set_left_border((3, nrows + 1), current_col + 3, "medium")
-	b.put_string(2, current_col, "all")
-	b.set_horizontal_align(2, current_col, "center")
+	b.set_right_border((3, nrows + 1), ncols, "medium")
+	b.set_number_format((4, nrows + 1), ncols, "percent_d2")
+	b.set_sheet_merge(sheetname, (2, 2), (ncols - 2, ncols))
+	b.put_string(2, ncols -2, "all")
+	b.set_number_format((12, 15), 8, "percent_d2")
 
-	b.set_font_bold((2, 3), (6, current_col + 3), "on")
+	b.set_horizontal_align(2, (5, ncols), "center")
+	b.set_font_bold((2, 3), (2, ncols), "on")
 
 	b.close_book()
 }
@@ -1142,7 +1169,9 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	positions
 	
 	if (nrows < 3000) {
+
 		b.set_right_border((4, nrows), 1, "medium")
+
 		
 		for (i = 1; i<=10; i++) {
 			b.set_right_border((4, nrows), positions[i], "medium")
@@ -1152,6 +1181,7 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	b.set_sheet_merge(sheetname, (2, 2), (respos + 1, respos + 3))
 
 	if (strtoreal(st_local("keeps")) > 0) {
+
 		b.set_sheet_merge(sheetname, (3, 3), (datepos + 1, keepspos))
 		b.put_string(3, datepos + 1, "Keep in Survey")
 	}
@@ -1159,6 +1189,7 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	if (strtoreal(st_local("keepb")) > 0) {
 		b.set_sheet_merge(sheetname, (3, 3), (keepspos + 1, keepbcpos))
 		b.put_string(3, keepspos + 1, "Keep in Backcheck")
+
 	}
 
 	if (nrows < 3000) {
@@ -1168,7 +1199,9 @@ void format_comparison(string scalar filename, string scalar sheetname)
 
 		lastcol = datepos
 		if (strtoreal(st_local("keeps")) > 0) {
+
 			lastcol = keepbcpos
+
 		}
 		b.set_border(3, (respos + 1, lastcol), "medium")
 	}
