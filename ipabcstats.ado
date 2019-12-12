@@ -1007,8 +1007,7 @@ void format_enumstats(string scalar filename, string scalar sheetname, string sc
 	b.set_right_border((3, nrows + 1), ncols, "medium")
 	b.set_number_format((4, nrows + 1), ncols, "percent_d2")
 	b.set_sheet_merge(sheetname, (2, 2), (ncols - 2, ncols))
-	b.put_string(2, ncols -2, "all")
-	b.set_number_format((12, 15), 8, "percent_d2")
+	b.put_string(2, ncols - 2, "all")
 
 	b.set_horizontal_align(2, (5, ncols), "center")
 	b.set_font_bold((2, 3), (2, ncols), "on")
