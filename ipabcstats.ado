@@ -53,10 +53,15 @@ program ipabcstats, rclass
    	[ttest(namelist) signrank(namelist) prtest(namelist) RELiability(namelist) Level(real -1)] 
    	[showid(str)] 
    	[KEEPSUrvey(namelist) keepbc(namelist) full FILEname(str) replace] 
-   	[EXCLUDENum(numlist) EXCLUDEStr(str asis) EXCLUDEMISSing LOwer UPper NOSymbol TRim]
+   	[EXCLUDENum(numlist) EXCLUDEStr(str asis) EXCLUDEMISSing LOwer UPper NOSymbol TRim NOLabel]
    	surveydate(name) bcdate(name)
     ;
 	#d cr			
+
+		* save data in memory
+		tempfile _originaldata
+		qui save `_originaldata', emptyok
+
 		* check syntax
 		* check that at least one variable is specified in t1, t2 or t3
 		if "`t1vars'`t2vars'`t3vars'" == "" {
@@ -723,9 +728,10 @@ program ipabcstats, rclass
 			loc lab = substr("`bcdate'", 4, .)
 			lab var `bcdate' "`lab'"
 
+
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey'  ///
-				using "`filename'", sheet("comparison") first(varl) cell(B4)
+				using "`filename'", sheet("comparison") first(varl) cell(B4) `nolabel'
 			
 			if "`bc_keepbc'" ~= "" {
 				
@@ -745,6 +751,16 @@ program ipabcstats, rclass
 			gen _a = "", before(`id')
 			unab id: `id'
 
+			if "`nolabel'" == "" { 
+				ds `enumerator' `enumteam' `backchecker' `bcteam' `bcteam' `keepsurvey' `bc_keepbc', has(vallab) 
+				foreach var in `r(varlist)'	{
+					decode `var', gen(`var'_new)
+					order `var'_new, after(`var')
+					drop `var'
+					ren `var'_new `var'
+					lab var `var' "`var'"	 
+				}
+			}
 
 
 			loc idcount `:word count `id''
@@ -755,7 +771,7 @@ program ipabcstats, rclass
 
 			mata: format_comparison("`filename'", "comparison")
 			mata: adjust_column_width("`filename'", "comparison")
-			pause
+			
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator) 
 			export excel using "`filename'", sheet("enumerator stats", replace) first(varl) cell(B3)
@@ -778,6 +794,8 @@ program ipabcstats, rclass
 			}
 
 		}	
+
+use `_originaldata', clear
 
 end
 
