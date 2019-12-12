@@ -606,7 +606,7 @@ program ipabcstats, rclass
 			cap gen surveylabel = ""
 			cap gen backchecklabel = ""
 
-			foreach name of varlist survey surveylabel backcheck backchecklab `id' `enumerator' `enumteam' `backchecker' `bcteam' `keepsurvey' {
+			foreach name of varlist survey surveylabel backcheck backchecklabel `id' `enumerator' `enumteam' `backchecker' `bcteam' `keepsurvey' {
 				lab var `name' "`name'"
 			}
 
@@ -684,7 +684,7 @@ program ipabcstats, rclass
 
 			graph drop _all
 			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") scheme(s1color) name(summary) ytitle("%")
-			graph export errorrates.png, width(460) replace name(summary)
+			graph export "`c(tmpdir)'errorrates.png", width(460) replace name(summary)
 			graph close
 			drop error_rate*
 			reshape long _vdiff valcount, i(`unit') j(vartype)
@@ -716,11 +716,39 @@ program ipabcstats, rclass
 			lab var vartype "Type"
 
 			export excel using "`filename'", sheet("summary") `replace' first(varlabel) cell(C11)
-			
+			loc directory "`c(tmpdir)'"
 			mata: add_summary_formatting("`filename'", "summary", "`c(current_date)'")
 
 			use `_cdata', clear
+			* create showid
+			use `_cdata', clear
+			if "`showid'" == "" loc showid "30%"
 
+			if regexm("`showid'", "%") {
+				loc showid = real(subinstr("`showid'", "%", "", .))/100
+				loc percent 1
+			}
+
+		 	bysort `id' : egen _iddifferences = total(_vdiff)
+		 	lab var _iddifferences "differences"
+	 		bysort `id' : gen _idcount = _N
+	 		lab var _idcount "# compared"
+	 		bysort `id' : gen count = _n
+	 		gen _iderror_rate = _iddifferences / _idcount
+	 		lab var _iderror_rate "% different"	
+
+	 		if `percent' {
+	 			keep if _iderror_rate > `showid' & count == 1
+	 		}
+	 		else keep if _iddifferences > `showid' & count == 1
+
+	 		if `=_N' > 1 {
+	 			gsort -_iderror_rate
+	 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate ///
+	 			using "`filename'", sheet("IDs") firstrow(varl) cell(B3)
+	 		}
+
+	 		use `_cdata', clear
 			if "`full'" == "" keep if _vdiff == 1
 			save `_cdata', replace
 
@@ -745,7 +773,7 @@ program ipabcstats, rclass
 		
 				export excel using "`filename'", sheet("comparison", modify) first(var) cell(`alphavar'4)
 			}
-			
+
 			use `_cdata', clear
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			gen _a = "", before(`id')
@@ -771,6 +799,8 @@ program ipabcstats, rclass
 
 			mata: format_comparison("`filename'", "comparison")
 			mata: adjust_column_width("`filename'", "comparison")
+
+
 			
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator) 
@@ -1018,6 +1048,7 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 
 	class xl scalar b
 	numeric scalar border
+	string scalar graphdir
 
 	b = xl()
 	
@@ -1065,9 +1096,9 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 	b.set_horizontal_align((2, 4), 3, "center")
 	
 	border = 16
-
 	if (strtoreal(st_local("count")) > 1) {
-		b.put_picture(18, 3, "errorrates.png")
+		graphdir = st_local("directory") + "errorrates.png"
+		b.put_picture(18, 3, graphdir)
 		border = 35
 	}
 
@@ -1095,7 +1126,7 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	b.set_mode("open")
 
 	nrows = st_nobs() + 4 
-	idpos = 2 + strtoreal(st_local("idcount"))
+	idpos = 1 + strtoreal(st_local("idcount"))
 	enumpos = idpos + strtoreal(st_local("enumcount"))
 	bcerpos = enumpos + strtoreal(st_local("bcer"))
 	varpos = bcerpos + 3
@@ -1111,44 +1142,44 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	positions
 	
 	if (nrows < 3000) {
-		b.set_left_border((4, nrows), 2, "medium")
+		b.set_right_border((4, nrows), 1, "medium")
 		
 		for (i = 1; i<=10; i++) {
-			b.set_left_border((4, nrows), positions[i], "medium")
+			b.set_right_border((4, nrows), positions[i], "medium")
 		}
 	}
 	
-	b.set_sheet_merge(sheetname, (2, 2), (respos, respos+2))
+	b.set_sheet_merge(sheetname, (2, 2), (respos + 1, respos + 3))
 
 	if (strtoreal(st_local("keeps")) > 0) {
-		b.set_sheet_merge(sheetname, (3, 3), (datepos, keepspos - 1))
-		b.put_string(3, datepos, "Keep in Survey")
+		b.set_sheet_merge(sheetname, (3, 3), (datepos + 1, keepspos))
+		b.put_string(3, datepos + 1, "Keep in Survey")
 	}
 	
-	if (strtoreal(st_local("keepbc")) > 0) {
-		b.set_sheet_merge(sheetname, (3, 3), (keepspos, keepbcpos - 1))
-		b.put_string(3, keepspos, "Keep in Backcheck")
+	if (strtoreal(st_local("keepb")) > 0) {
+		b.set_sheet_merge(sheetname, (3, 3), (keepspos + 1, keepbcpos))
+		b.put_string(3, keepspos + 1, "Keep in Backcheck")
 	}
 
 	if (nrows < 3000) {
-		b.set_top_border((4, 5), (2, keepbcpos-1), "medium")
-		b.set_bottom_border(nrows, (2, keepbcpos-1), "medium")
+		b.set_top_border((4, 5), (2, keepbcpos), "medium")
+		b.set_bottom_border(nrows, (2, keepbcpos), "medium")
 		
 
-		lastcol = respos
-		if (strtoreal(st_local("keepbc")) > 0) {
-			lastcol = keepbcpos - 1
+		lastcol = datepos
+		if (strtoreal(st_local("keeps")) > 0) {
+			lastcol = keepbcpos
 		}
-		b.set_border(3, (respos, lastcol), "medium")
+		b.set_border(3, (respos + 1, lastcol), "medium")
 	}
 
-	b.set_horizontal_align((2, 3), (respos, keepbcpos), "center")
+	b.set_horizontal_align((2, 3), (respos + 1, keepbcpos), "center")
 	b.set_font_bold((2,4), (2, keepbcpos), "on")
 
-	b.put_string(3, respos, "Survey")
-	b.put_string(3, respos + 1, "Backcheck")
-	b.put_string(3, respos + 2, "Difference")
-	b.put_string(2, respos, "Dates")
+	b.put_string(3, respos + 1, "Survey")
+	b.put_string(3, respos + 2, "Backcheck")
+	b.put_string(3, respos + 3, "Difference")
+	b.put_string(2, respos + 1, "Dates")
 
 	b.close_book()
 
