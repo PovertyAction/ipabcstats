@@ -722,7 +722,7 @@ program ipabcstats, rclass
 			lab var `surveydate' "`surveydate'"
 			loc lab = substr("`bcdate'", 4, .)
 			lab var `bcdate' "`lab'"
-set trace on
+
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey'  ///
 				using "`filename'", sheet("comparison") first(varl) cell(B4)
