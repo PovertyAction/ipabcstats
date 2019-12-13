@@ -8,17 +8,11 @@ bcstats was originally programmed by:
 Matt White (Innovations for Poverty Action)
 
 Todo:
-	- okrange
-		-- parse okrange -- done
-		-- include syntax check -- done
 	- test
 		-- ttest
 		-- prtest
 		-- stability test
 	- exports sheets:
-		-- Comparison
-		-- enumerator error rates
-		-- back checker error rates
 		-- test
 			-- ttest
 			-- prtest
