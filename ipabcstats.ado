@@ -721,13 +721,20 @@ program ipabcstats, rclass
 			mata: add_summary_formatting("`filename'", "summary", "`c(current_date)'")
 
 			use `_cdata', clear
+			
 			* create showid
 			use `_cdata', clear
+			
+			* check syntax
 			if "`showid'" == "" loc showid "30%"
-
+ 
 			if regexm("`showid'", "%") {
 				loc showid = real(subinstr("`showid'", "%", "", .))/100
 				loc percent 1
+				if `showid' > 1 {
+					dis as err "opt showid (`=`showid'*100'%) cannot be higher than 100%. Use a lower percentage or use an absolute number."
+					ex 198
+				}
 			}
 
 		 	bysort `id' : egen _iddifferences = total(_vdiff)
@@ -738,15 +745,21 @@ program ipabcstats, rclass
 	 		gen _iderror_rate = _iddifferences / _idcount
 	 		lab var _iderror_rate "% different"	
 
-	 		if `percent' {
-	 			keep if _iderror_rate > `showid' & count == 1
-	 		}
+	 		sum _idcount
+			if `showid' > `r(min)' {
+				dis as err "opt showid (`showid') is higher than the number of comparisons (`r(min)'). Use a lower number or use a percentage (add '%'). "
+				ex 198
+			}
+
+	 		if "`percent'" == "1" keep if _iderror_rate > `showid' & count == 1
 	 		else keep if _iddifferences > `showid' & count == 1
 
-	 		if `=_N' > 1 {
+	 		if `=_N' > 0 {
 	 			gsort -_iderror_rate
+	 			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate
 	 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate ///
 	 			using "`filename'", sheet("IDs") firstrow(varl) cell(B3)
+	 			mata: format_showids("`filename'", "IDs")
 	 		}
 
 	 		use `_cdata', clear
@@ -1213,9 +1226,49 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	b.put_string(3, respos + 3, "Difference")
 	b.put_string(2, respos + 1, "Dates")
 
+	b.set_row_height(1, 1, 10)
+
 	b.close_book()
 
 }
 
+
+void format_showids (string scalar filename, string scalar sheetname) {
+
+	class xl scalar b 
+	real scalar nrows, nvars
+
+	b = xl()
+	nrows = st_nobs() + 3
+	nvars = st_nvar() + 1
+	b.load_book(filename)
+	b.set_sheet(sheetname)
+	b.set_mode("open")
+
+	b.set_right_border((3, nrows), 1, "medium")
+	b.set_right_border((3, nrows), nvars - 3, "medium")
+	b.set_right_border((3, nrows), nvars, "medium")
+	b.set_top_border((3, 4), (2, nvars), "medium")
+	b.set_bottom_border(nrows, (2, nvars), "medium")
+	b.set_number_format((4, nrows), nvars, "percent_d2")
+
+	b.set_column_width(nvars - 2, nvars, 10)
+	b.set_column_width(1, 1, 1)
+
+	for(i = 1; i <= nvars - 4; i++) {
+		collen = colmax(strlen(st_sdata(., i)))
+		namelen = strlen(st_varname(i))
+		if (namelen > collen) {
+			collen = namelen
+		}
+
+		b.set_column_width(i + 1, i + 1, collen)
+	}
+	b.set_horizontal_align((3, nrows), (2, nvars), "center")
+	b.set_row_height(1, 1, 10)
+
+	b.close_book()
+
+}
 
 end
