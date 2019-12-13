@@ -13,7 +13,9 @@ Todo:
 		-- prtest
 		-- stability test
 	- exports sheets:
-		-- test
+		-- Comparison -- done
+		-- enumerator error rates - done
+		-- back checker error rates - done		-- test
 			-- ttest
 			-- prtest
 			-- stability test
