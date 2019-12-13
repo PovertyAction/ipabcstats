@@ -141,7 +141,7 @@ the survey and back check, and differences may result in action against
 the enumerator. Display variables with high error rates and
 complete enumerator checks.
 See the Innovations for Poverty Action
-{help bcstats##back_check_manual:back check manual} for
+{help ipabcstats##back_check_manual:back check manual} for
 more on the three types.
 
 {phang}
@@ -212,7 +212,7 @@ will be marked as "not compared" if you use the {it:full} option. Otherwise, the
 
 {phang}
 {opt excludemissing} specifies that
-back check responses that are missing will not be compared. This uses the {help missing} command, so any extended missing value [., .a, .b, ..., .z] for numeric variables, and blanks ("") for string variables. Used when the back check data set contains data for
+back check responses that are missing will not be compared. This uses the {manhelp missing R} command, so any extended missing value [., .a, .b, ..., .z] for numeric variables, and blanks ("") for string variables. Used when the back check data set contains data for
 multiple back check survey versions.
 
 {phang}
