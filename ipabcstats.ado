@@ -83,6 +83,12 @@ program ipabcstats, rclass
 			}
 		}
 
+		else if `showid' > `:word count `t1vars' `t2vars' `t3vars'' {
+			dis as err "option showid (`showid') is higher than the highest possible number of comparisons (`: word count `t1vars' `t2vars' `t3vars'')." 
+			dis as err "Use a lower number or use a percentage (add '%')."
+			ex 198
+		}
+		
 		* parse okrange
 		if "`okrange'" ~= "" {
 			loc okrange = subinstr("`okrange'", " ", "", .)
@@ -738,10 +744,7 @@ program ipabcstats, rclass
 	 		sum _idcount
 	 		loc idmin = `r(min)'
 	 		loc idmax = `r(max)'
-			if `showid' > `idmax' {
-				dis as err "option showid (`showid') is higher than the highest number of comparisons (`idmax')." 
-				dis as err "Use a lower number or use a percentage (add '%'). option showid will not run."
-			}
+
 
 			else {
 		 		if "`percent'" == "1" keep if _iderror_rate > `showid' & count == 1
@@ -925,7 +928,7 @@ program ipabcstats, rclass
 				}
 
 				post postchecks ("`var'") ("`label'") ("`type'") (`diff') (`total') ///
-						(round((`diff'/`total')*100, 0.01)) (`surveymean') (`bcmean') (`differences') ("`test'") ///
+						(round((`diff'/`total'), 0.01)) (`surveymean') (`bcmean') (`differences') ("`test'") ///
 						(`pvalue') (`srv') (`ratio')
 
 			}
@@ -933,9 +936,16 @@ program ipabcstats, rclass
 			postclose postchecks
 			use `_checks', clear
 			mvdecode surveymean bcmean differences pvalue srv ratio, mv(-222 = .)
-
 			lab var surveymean 	"survey mean"
 			lab var bcmean 		"backcheck mean"
+
+			if "`ttest'`prtest'`signrank'" == "" {
+				drop surveymean bcmean differences pvalue test
+			}  
+			if "`reliability'" == "" {
+				drop srv ratio
+			}
+
 
 			export excel using "`filename'", sheet("variable stats") first(varl) cell(B3)
 
