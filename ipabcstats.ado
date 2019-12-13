@@ -76,6 +76,17 @@ program ipabcstats, rclass
 			ex 198
 		}
 				 
+		* check showid
+		if "`showid'" == "" loc showid "30%"
+
+		if regexm("`showid'", "%") {
+			loc showid = real(subinstr("`showid'", "%", "", .))/100
+			loc percent 1
+			if `showid' > 1 {
+				dis as err "opt showid (`=`showid'*100'%) cannot be higher than 100%. Use a lower percentage or use an absolute number."
+				ex 198
+			}
+		}
 
 		* parse okrange
 		if "`okrange'" ~= "" {
@@ -719,23 +730,9 @@ program ipabcstats, rclass
 			export excel using "`filename'", sheet("summary") `replace' first(varlabel) cell(C11)
 			loc directory "`c(tmpdir)'"
 			mata: add_summary_formatting("`filename'", "summary", "`c(current_date)'")
-
-			use `_cdata', clear
 			
 			* create showid
 			use `_cdata', clear
-			
-			* check syntax
-			if "`showid'" == "" loc showid "30%"
- 
-			if regexm("`showid'", "%") {
-				loc showid = real(subinstr("`showid'", "%", "", .))/100
-				loc percent 1
-				if `showid' > 1 {
-					dis as err "opt showid (`=`showid'*100'%) cannot be higher than 100%. Use a lower percentage or use an absolute number."
-					ex 198
-				}
-			}
 
 		 	bysort `id' : egen _iddifferences = total(_vdiff)
 		 	lab var _iddifferences "differences"
@@ -746,21 +743,30 @@ program ipabcstats, rclass
 	 		lab var _iderror_rate "% different"	
 
 	 		sum _idcount
-			if `showid' > `r(min)' {
-				dis as err "opt showid (`showid') is higher than the number of comparisons (`r(min)'). Use a lower number or use a percentage (add '%'). "
-				ex 198
+	 		loc idmin = `r(min)'
+	 		loc idmax = `r(max)'
+			if `showid' > `idmax' {
+				dis as err "option showid (`showid') is higher than the highest number of comparisons (`idmax')." 
+				dis as err "Use a lower number or use a percentage (add '%'). option showid will not run."
 			}
 
-	 		if "`percent'" == "1" keep if _iderror_rate > `showid' & count == 1
-	 		else keep if _iddifferences > `showid' & count == 1
+			else {
+		 		if "`percent'" == "1" keep if _iderror_rate > `showid' & count == 1
+		 		else keep if _iddifferences > `showid' & count == 1
 
-	 		if `=_N' > 0 {
-	 			gsort -_iderror_rate
-	 			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate
-	 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate ///
-	 			using "`filename'", sheet("IDs") firstrow(varl) cell(B3)
-	 			mata: format_showids("`filename'", "IDs")
+		 		if `=_N' > 0 {
+		 			gsort -_iderror_rate
+		 			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate
+		 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate ///
+		 			using "`filename'", sheet("IDs") firstrow(varl) cell(B3)
+		 			mata: format_showids("`filename'", "IDs")
+		 		}
 	 		}
+		
+			if `showid' > `idmin' & `showid' < `idmax' {
+				dis as err "opt showid (`showid') is higher than the number of comparisons for at least one observation (`idmin')." 
+				dis as err "Use a lower number to include all observations or use a percentage (add '%'). "
+			}
 
 	 		use `_cdata', clear
 			if "`full'" == "" keep if _vdiff == 1
