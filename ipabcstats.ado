@@ -16,15 +16,13 @@ Todo:
 		-- prtest
 		-- stability test
 	- exports sheets:
-		-- Comparison
-		-- enumerator error rates
-		-- back checker error rates
-		-- test
+		-- Comparison -- done
+		-- enumerator error rates - done
+		-- back checker error rates - done
+		-- test 
 			-- ttest
 			-- prtest
 			-- stability test
-			
-			* export all test to the same page with min, mean, max, sd for survey and bc
 			
 Wishlist:
 	-- dialog
@@ -388,8 +386,6 @@ program ipabcstats, rclass
 			count if _mergebc == 2
 			loc bc_only `r(N)'
 			
-			if "`ttest'`prtest'`signrank'`reliability'" ~= "" save `_fmdata'
-
 			keep if inlist(_mergebc, 2, 3)
 
 
@@ -838,6 +834,94 @@ program ipabcstats, rclass
 				gen _a = ""
 				mata: format_enumstats("`filename'", "backchecker team stats", "`bcteam'", 1)
 			}
+
+
+			* Create stats for variables
+			cap postclose postchecks
+			postfile postchecks str32(variable) str80(label) str10(type) int(diffs total) ///
+				double(error_rate)	double(surveymean bcmean differences) str10(test) ///
+				double(pvalue srv ratio) ///
+				using `_checks', replace
+
+			use `_diffs', clear
+			keep _vvar _vvlab _vtype _compared _vdiff _survey _backcheck
+			destring _survey _backcheck, force replace
+
+			foreach var in `tvars' {
+				loc type = cond(`:list var in t1vars', "type 1", cond(`:list var in t2vars', "type 2", "type3"))
+				count if _vdiff == 1 & _vvar == "`var'"
+				loc diff `r(N)'
+				count if _compared & _vvar == "`var'"
+				loc total `r(N)'
+				levelsof _vvlab if _vvar == "`var'", loc (label) clean
+
+				if `:list var in ttest' | `:list var in prtest' | `:list var in signrank' | `:list var in reliability' {
+					qui su _survey if _compared
+					loc surveymean = round(`r(mean)', 0.01)
+					qui su _backcheck if _compared
+					loc bcmean = round(`r(mean)', 0.01)
+					loc differences = round(`surveymean' - `bcmean', 0.01) 
+				}
+				
+				if `:list var in reliability' {
+
+					gen _reldiff = _survey - _backcheck if _compared & _vvar == "`var'"
+					su _reldiff if _compared & _vvar == "`var'"
+					loc srv = r(sd)^2 / 2
+					drop _reldiff
+
+					* Calculate the variance of the back check variable.
+					* We're using the back check variable instead of the survey variable,
+					* thinking that the back check data is probably more reliable.
+					su _backcheck if _compared & _vvar == "`var'"
+					loc variance = r(sd)^2
+
+					loc ratio = 1 - `srv' / `variance'
+				}
+				else {
+					loc srv   -222
+					loc ratio -222
+				}
+
+				if `:list var in ttest' {
+					ttest _survey == _backcheck if _compared & _vvar == "`var'"
+					loc test 			"ttest"
+					loc pvalue 			`r(p)'
+				}
+				else if `:list var in prtest' {
+					
+					prtest _survey == _backcheck if _compared & _vvar == "`var'"
+					loc test 			"prtest"
+					loc pvalue 			`r(p)'
+				}
+				else if `:list var in signrank' {
+
+					signrank _survey = _backcheck if _compared & _vvar == "`var'"
+					loc test 			"signrank"
+					loc pvalue 			`r(p_2)'
+				}
+				else {
+					loc surveymean  -222
+					loc bcmean 		-222
+					loc differences -222
+					loc test 		""
+					loc pvalue 		-222
+				}
+
+				post postchecks ("`var'") ("`label'") ("`type'") (`diff') (`total') ///
+						(round((`diff'/`total')*100, 0.01)) (`surveymean') (`bcmean') (`differences') ("`test'") ///
+						(`pvalue') (`srv') (`ratio')
+
+			}
+
+			postclose postchecks
+			use `_checks', clear
+			mvdecode surveymean bcmean differences pvalue srv ratio, mv(-222 = .)
+
+			lab var surveymean 	"survey mean"
+			lab var bcmean 		"backcheck mean"
+
+			export excel using "`filename'", sheet("variable stats") first(varl) cell(B3)
 
 		}	
 
