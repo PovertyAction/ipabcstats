@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0 Ishmail Baako 13dec2019}{...}
+{* *! version 1.0.0 Innovations for Poverty Action 13dec2019}{...}
 {title:Title}
 
 {phang}
