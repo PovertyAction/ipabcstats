@@ -459,17 +459,17 @@ program ipabcstats, rclass
 				gen _vtype = cond(`:list var in t1vars', "type 1", cond(`:list var in t2vars', "type 2", "type 3"))
 				
 				* Mark variables that need to be compared
-				if "`excludemissing'" ~= "" gen _compared = !missing(`var') & !missing(_bc`var')
+				if "`excludemissing'" ~= "" gen _compared = !missing(_bc`var')
 				else gen _compared = 1
 
-				* check change to not compared for values included EXCLUDENum
+				* change to not compared for values included EXCLUDENum
 				cap confirm numeric var `var' 
 				if !_rc {
 					if "`excludenum'" ~= "" {
 						loc exn_cnt = wordcount("`excludenum'")
 						forval x = 1/`exn_cnt' {
 							loc exn_val = word("`excludenum'", `x')
-							replace _compared = 0 if `var' == `exn_val' | _bc`var' == `exn_val'
+							replace _compared = 0 if _bc`var' == `exn_val'
 						}
 					}
 				}
@@ -478,10 +478,8 @@ program ipabcstats, rclass
 						local rest `"`excludestr'"'
 						while `"`rest'"' ~= "" {
 							gettoken exs_val rest: rest
-							replace _compared = 0 if `var' == "`exs_val'" | _bc`var' == "`exs_val'"
-						}
-
-						gettoken val rest: rest,  
+							replace _compared = 0 if _bc`var' == "`exs_val'"
+						} 
 					}
 				}
 
@@ -535,7 +533,7 @@ program ipabcstats, rclass
 
 					* apply nodiff
 					if "`nodiffnum'" ~= "" {
-						replace _vdiff = 0 if inlist(`var', `nodiffnum_list') & inlist(_bc`var', `nodiffnum_list')
+						replace _vdiff = 0 if inlist(_bc`var', `nodiffnum_list')
 					}
 				}
 				else {
@@ -544,16 +542,8 @@ program ipabcstats, rclass
 						local rest "`nodiffstr_list'"
 						while `"`rest'"' ~= "" {
 							gettoken nds_val rest: rest, parse(,)
-							replace _vdiff = 0 if `var' == "`nds_val'" & _bc`var' == "`nds_val'"
-
-							loc ex_rest "`nodiffstr_list'"
-							while `"`ex_rest'"' ~= "" {
-								gettoken ndx_val ex_rest: ex_rest, parse(,)
-								replace _vdiff = 0 if inlist("`nds_val'", "`ndx_val'",  `var') &  inlist("`nds_val'", "`ndx_val'",  _bc`var')
-							}
+							replace _vdiff = 0 if _bc`var' == "`nds_val'"
 						}
-
-						gettoken val rest: rest, parse(,) 
 					}
 				}
 
