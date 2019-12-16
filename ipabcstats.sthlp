@@ -11,7 +11,7 @@ producing an Excel output of comparisons and error rates.
 {title:Syntax}
 
 {p 8 10 2}
-{cmd:bcstats,}
+{cmd:ipabcstats,}
 {opth s:urveydata(filename)} 
 {opth b:cdata(filename)} 
 {opth id(varlist)}
@@ -86,11 +86,11 @@ it falls within {it:range} of the survey data{p_end}
 {synopt:{opth nodiffn:um(numlist)}} do not count
 back check responses that equal {it:#} as differences{p_end}
 
-{synopt:{cmd:{ul:nodiffs}tr(}{it:"string"} [, {it:"string"} ...]{cmd:)}} do not count
+{synopt:{cmd:{ul:nodiffs}tr(}{it:"string"} [ {it:"string"} ...]{cmd:)}} do not count
 back check responses that equal {it:string(s)} as differences. Use quotations around each individual string.{p_end}
 
 {synopt:{opth excluden:um(numlist)}} do not compare back check responses that equal any number in {it:numlist}.{p_end}
-{synopt:{cmd:{ul:excludes}tr(}{it:"string"} [, {it:"string"} ...]{cmd:)}} do not compare back check responses that equal any string.{p_end}
+{synopt:{cmd:{ul:excludes}tr(}{it:"string"} [ {it:"string"} ...]{cmd:)}} do not compare back check responses that equal any string.{p_end}
 {synopt:{opt excludemiss:ing}} do not compare back check responses that
 are missing. Includes extended missing values for numeric variables [., .a, .b, ..., .z] and blanks "" for string variables.{p_end}
 {synopt:{opt lo:wer}}convert all string variables to lower case before
@@ -309,7 +309,8 @@ the three variable types. bcstats was originally written by Matthew White with e
 {marker author}{...}
 {title:Author}
 
-{pstd}Ishmail Baako{p_end}
+{pstd}Ishmail Azindoo Baako{p_end}
+{pstd}Rosemarie Sandino{p_end}
 
 {pstd}For questions or suggestions, submit a
 {browse "https://github.com/PovertyAction/ipabcstats/issues":GitHub issue}
@@ -319,5 +320,5 @@ or e-mail researchsupport@poverty-action.org.{p_end}
 {title:Also see}
 
 {psee}
-Help:  {manhelp ttest R}, {manhelp signrank R}
+Help:  {manhelp ttest R}, {manhelp prtest R}, {manhelp signrank R}
 
