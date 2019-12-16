@@ -669,7 +669,8 @@ program ipabcstats, rclass
 			lab var error_rate_total "Total" 
 
 			graph drop _all
-			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") scheme(s1color) name(summary) ytitle("%")
+			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") ///
+			scheme(s1color) name(summary) ytitle("%") lwidth(thin thin thin thick) lpattern(dash dash dash solid)
 			graph export "`c(tmpdir)'errorrates.png", width(460) replace name(summary)
 			graph close
 			drop error_rate*
