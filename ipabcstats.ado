@@ -6,24 +6,9 @@ at Innovations for Poverty Action.
 
 bcstats was originally programmed by:
 Matt White (Innovations for Poverty Action)
-
-Todo:
-	- test
-		-- ttest
-		-- prtest
-		-- stability test
-	- exports sheets:
-		-- Comparison -- done
-		-- enumerator error rates - done
-		-- back checker error rates - done
-		-- test 
-			-- ttest
-			-- prtest
-			-- stability test
 			
 Wishlist:
 	-- dialog
-	-- excel inputs file
 	-- fuzzy match strings (preferable write new command, alternative use matchit, reclink or strgroup)
 
 */
@@ -865,9 +850,9 @@ program ipabcstats, rclass
 				levelsof _vvlab if _vvar == "`var'", loc (label) clean
 
 				if `:list var in ttest' | `:list var in prtest' | `:list var in signrank' | `:list var in reliability' {
-					qui su _survey if _compared
+					qui su _survey if _compared & _vvar == "`var'"
 					loc surveymean = round(`r(mean)', 0.01)
-					qui su _backcheck if _compared
+					qui su _backcheck if _compared & _vvar == "`var'"
 					loc bcmean = round(`r(mean)', 0.01)
 					loc differences = round(`surveymean' - `bcmean', 0.01) 
 				}
@@ -928,6 +913,9 @@ program ipabcstats, rclass
 			mvdecode surveymean bcmean differences pvalue srv ratio, mv(-222 = .)
 			lab var surveymean 	"survey mean"
 			lab var bcmean 		"backcheck mean"
+			lab var test 		"test type"
+
+			order test, before(surveymean)
 
 			if "`ttest'`prtest'`signrank'" == "" {
 				drop surveymean bcmean differences pvalue test
@@ -936,8 +924,11 @@ program ipabcstats, rclass
 				drop srv ratio
 			}
 
-
 			export excel using "`filename'", sheet("variable stats") first(varl) cell(B3)
+			gen _a = "", before(variable)
+			loc mt = cond("`ttest'`prtest'`signrank'" ~= "", 1, 0)
+			loc rlb = cond("`reliability'" ~= "", 1, 0)
+			noi mata: format_varstats("`filename'", "variable stats", `mt', `rlb')
 
 		}	
 
@@ -1265,7 +1256,6 @@ void format_comparison(string scalar filename, string scalar sheetname)
 
 
 	positions = (idpos\enumpos\bcerpos\varpos\spos\bcpos\respos\datepos\keepspos\keepbcpos)
-	positions
 	
 	if (nrows < 3000) {
 
@@ -1356,6 +1346,80 @@ void format_showids (string scalar filename, string scalar sheetname) {
 
 	b.close_book()
 
+}
+
+void format_varstats (string scalar filename, string scalar sheetname, real scalar mt, rlb) {
+
+	class xl scalar b 
+	real scalar nrows, nvars
+
+	nrows = st_nobs() + 3
+	ncols = st_nvar()
+
+	b = xl()
+	b.load_book(filename)
+	b.set_sheet(sheetname)
+	b.set_mode("open")
+
+	if (mt == 1) {
+		testpos = 12
+		b.set_column_width(8, 8, 10)
+		b.set_column_width(9, 9, 11)
+		b.set_column_width(10, 10, 14)
+		b.set_column_width(11, 12, 10)
+		b.set_sheet_merge(sheetname, (2, 2), (8, 12))
+		b.set_horizontal_align(2, (8, 12), "center")
+		b.put_string(2, 8, "mean comparison test")
+		b.set_number_format((3, nrows), (8, 12), "number_d2")
+	}
+	else {
+		testpos = 7
+	}
+
+	if (rlb == 1) {
+		rlbpos = testpos + 2
+		b.set_column_width(testpos, rlbpos, 10)
+		b.set_sheet_merge(sheetname, (2, 2), (testpos + 1, ncols))
+		b.set_horizontal_align(2, (testpos + 1, ncols), "center")
+		b.put_string(2, testpos + 1, "reliability test")
+		b.set_number_format((3, nrows), (testpos + 1, ncols), "number_d2")
+	}
+
+	positions = (1\4\7\testpos\ncols)
+
+	for (i = 1; i<=5; i++) {
+		b.set_right_border((3, nrows), positions[i], "medium")
+	}
+
+	b.set_top_border(3, (2, ncols), "medium")
+	b.set_bottom_border(3, (2, ncols), "medium")
+	b.set_bottom_border(nrows, (2, ncols), "medium")
+
+	b.set_font_bold((2, 3), (2, ncols), "on")
+
+	b.set_row_height(1, 1, 10)
+	b.set_column_width(1, 1, 1)
+	
+	collen = colmax(strlen(st_sdata(., 2)))
+	namelen = strlen(st_varname(2))
+	if (namelen > collen) {
+		collen = namelen
+	}
+	b.set_column_width(2, 2, collen)
+
+	collen = colmax(strlen(st_sdata(., 3)))
+	namelen = strlen(st_varname(3))
+	if (namelen > collen) {
+		collen = namelen
+	}
+	b.set_column_width(3, 3, collen)
+
+	b.set_column_width(4, 7, 10)
+
+	b.set_number_format((3, nrows), 7, "percent_d2")
+	b.set_horizontal_align((4, nrows), (5, ncols), "center")
+
+	b.close_book()
 }
 
 end
