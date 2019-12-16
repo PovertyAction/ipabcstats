@@ -1,0 +1,4 @@
+v 3
+d 'IPABCSTATS': Stata program to analyze back check data
+f ipabcstats.ado
+f ipabcstats.sthlp
