@@ -585,6 +585,7 @@ program ipabcstats, rclass
 			bysort `id' : gen first = _n
 			sum days if first == 1
 			loc days_diff : piece 1 4 of  "`r(mean)'"
+			return scalar avg_days = `days_diff'
 
 			* export comparison/differences
 			gen result = cond(_vdiff == ., "not compared", cond(!_vdiff, "not different", "different"))
@@ -668,15 +669,20 @@ program ipabcstats, rclass
 			gen error_rate_total = round((_vdifftotal / valcounttotal) * 100, 0.01)
 			lab var error_rate_total "Total" 
 
+			tempname rates_time
+			mkmat `unit' error_rate*, matrix(`rates_time')
+			return matrix rates_time = `rates_time'
+
 			graph drop _all
 			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") ///
 			scheme(s1color) name(summary) ytitle("%") lwidth(thin thin thin thick) lpattern(dash dash dash solid)
 			graph export "`c(tmpdir)'errorrates.png", width(460) replace name(summary)
 			graph close
 			drop error_rate*
-			reshape long _vdiff valcount, i(`unit') j(vartype)
 
+			reshape long _vdiff valcount, i(`unit') j(vartype)
 			collapse (sum) valcount _vdiff, by(vartype)
+
 
 			set obs 4
 			replace vartype = 4 in 4
@@ -701,6 +707,13 @@ program ipabcstats, rclass
 			lab var _vdiff "differences"
 			lab var error_rate "Error rate (%)"
 			lab var vartype "Type"
+
+			* summary page matrix
+			tempname rates
+			mkmat varcount valcount _vdiff error_rate, matrix(`rates')
+			matrix coln `rates' = "variables" "values" "differences" "error rate" 
+			matrix rown `rates' = "type 1" "type 2" "type 3" "total"
+			return matrix rates = `rates'
 
 			export excel using "`filename'", sheet("summary") `replace' first(varlabel) cell(C11)
 			loc directory "`c(tmpdir)'"
