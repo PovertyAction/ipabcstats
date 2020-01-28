@@ -384,7 +384,12 @@ program ipabcstats, rclass
 			loc survey_only `r(N)'
 			count if _mergebc == 2
 			loc bc_only `r(N)'
-			
+
+			if `bc_only' > 0 {
+				tempfile _bconlyids
+				save "`_bconlyids'", replace
+			}
+
 			keep if inlist(_mergebc, 2, 3)
 
 
@@ -669,9 +674,9 @@ program ipabcstats, rclass
 			gen error_rate_total = round((_vdifftotal / valcounttotal) * 100, 0.01)
 			lab var error_rate_total "Total" 
 
-			tempname rates_time
-			mkmat `unit' error_rate*, matrix(`rates_time')
-			return matrix rates_time = `rates_time'
+			tempname rates_`unit'
+			mkmat `unit' error_rate*, matrix(`rates_`unit'')
+			return matrix rates_`unit' = `rates_`unit''
 
 			graph drop _all
 			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") ///
@@ -719,6 +724,35 @@ program ipabcstats, rclass
 			loc directory "`c(tmpdir)'"
 			mata: add_summary_formatting("`filename'", "summary", "`c(current_date)'")
 			
+
+			* export bc only IDs
+			if `bc_only' > 0 {
+				use `_bconlyids', clear
+				keep if _mergebc == 2
+				keep `id' `backchecker' `bcteam' _bc*
+				ds _bc*
+				loc bcexportvars
+				foreach var in `r(varlist)' {
+					loc stub = substr("`var'", 4, .)
+					ren `var' `stub'
+					loc bcexportvars `bcexportvars' `stub'
+				}
+
+				if "`nolabel'" == "" { 
+					ds `id' `backchecker' `bcteam' `bcexportvars', has(vallab) 
+					foreach var in `r(varlist)'	{
+						decode `var', gen(`var'_new)
+						order `var'_new, after(`var')
+						drop `var'
+						ren `var'_new `var'
+						lab var `var' "`var'"	 
+					}
+				}
+				sort `id' `backchecker' `bcteam' `bcexportvars'
+				export excel `id' `bcexportvars' using "`filename'", sheet("backcheck only", modify) first(var) cell(B3)  `nolabel'
+				mata: format_bconlyids("`filename'", "backcheck only")
+			}
+
 			* create showid
 			use `_cdata', clear
 
@@ -1324,8 +1358,8 @@ void format_comparison(string scalar filename, string scalar sheetname)
 }
 
 
-void format_showids (string scalar filename, string scalar sheetname) {
 
+void format_showids (string scalar filename, string scalar sheetname) {
 	class xl scalar b 
 	real scalar nrows, nvars
 
@@ -1435,5 +1469,55 @@ void format_varstats (string scalar filename, string scalar sheetname, real scal
 
 	b.close_book()
 }
+
+void format_bconlyids (string scalar filename, string scalar sheetname) {
+	class xl scalar b 
+	real scalar nrows, nvars
+
+
+	b = xl()
+	nrows = st_nobs() + 3
+	nvars = st_nvar()
+	b.load_book(filename)
+	b.set_sheet(sheetname)
+	b.set_mode("open")
+
+	b.set_right_border((3, nrows), 1, "medium")
+	//b.set_right_border((3, nrows), nvars - 3, "medium")
+	b.set_right_border((3, nrows), nvars, "medium")
+	b.set_top_border((3, 4), (2, nvars), "medium")
+	b.set_bottom_border(nrows, (2, nvars), "medium")
+	
+	//b.set_column_width(nvars - 2, nvars, 10)
+	b.set_column_width(1, 1, 1)
+
+	for(i = 1; i <= nvars; i++) {
+		collen = colmax(strlen(st_sdata(., i)))
+//		namelen = strlen(st_varname(i))
+
+		if (st_varname(i) == st_local("surveydate") | st_varname(i) == st_local("bcdate") | st_varname(i) == "starttime" | st_varname(i) == "endtime" | st_varname(i) == "submissiondate") {
+			namelen = 16
+		} 
+		else namelen = strlen(st_varname(i))
+
+		if (namelen > collen) {
+			collen = namelen
+		}
+
+
+
+		b.set_column_width(i, i, collen)
+	}
+
+
+	b.set_horizontal_align((3, nrows), (2, nvars), "center")
+	b.set_row_height(1, 1, 10)
+	b.set_column_width(1, 1, 1)
+
+	b.close_book()
+
+}
+
+
 
 end
