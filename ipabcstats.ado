@@ -384,15 +384,14 @@ program ipabcstats, rclass
 			loc survey_only `r(N)'
 			count if _mergebc == 2
 			loc bc_only `r(N)'
-
-			if `bc_only' > 0 {
-				tempfile _bconlyids
-				save "`_bconlyids'", replace
-			}
+			loc _surveyed `=_N'
 
 			keep if inlist(_mergebc, 2, 3)
-
-
+			
+			loc _backchecked `=_N'
+			return scalar bc = `_backchecked'
+			return scalar survey = `_surveyed'
+			
 			unab admin:	`id' `enumerator' `enumteam' `backchecker' `bcteam' `surveydate' `bcdate'
 			save `_mdata', replace
 
@@ -728,7 +727,7 @@ program ipabcstats, rclass
 			return scalar bc_only = `bc_only'
 			* export bc only IDs
 			if `bc_only' > 0 {
-				use `_bconlyids', clear
+				use `_bconly', clear
 				keep if _mergebc == 2
 				keep `id' `backchecker' `bcteam' _bc*
 				ds _bc*
@@ -1225,9 +1224,11 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 	b.put_string(2, 3, "Back Check Analysis")
 	b.put_string(4, 3, "Average Days between Survey and Backcheck: " + st_local("days_diff") ) 
 
-
 	b.put_string(6, 3, "Date: ")
 	b.put_string(6, 5, date)
+
+	b.put_string(7, 3, "Backcheck Rate: ")
+	b.put_string(7, 5, st_local("_backchecked") + " / " + st_local("_surveyed"))
 
 	b.put_string(8, 3, "Survey Data:")
 	b.put_string(8, 5, st_local("surveydata"))
