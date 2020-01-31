@@ -719,12 +719,13 @@ program ipabcstats, rclass
 			matrix coln `rates' = "variables" "values" "differences" "error rate" 
 			matrix rown `rates' = "type 1" "type 2" "type 3" "total"
 			return matrix rates = `rates'
-
+			loc total `=error_rate[4]'
+			return scalar errorrate = `total'
 			export excel using "`filename'", sheet("summary") `replace' first(varlabel) cell(C11)
 			loc directory "`c(tmpdir)'"
 			mata: add_summary_formatting("`filename'", "summary", "`c(current_date)'")
 			
-
+			return scalar bc_only = `bc_only'
 			* export bc only IDs
 			if `bc_only' > 0 {
 				use `_bconlyids', clear
@@ -769,18 +770,17 @@ program ipabcstats, rclass
 	 		loc idmax = `r(max)'
 
 
-			else {
 		 		if "`percent'" == "1" keep if _iderror_rate > `showid' & count == 1
 		 		else keep if _iddifferences > `showid' & count == 1
-
-		 		if `=_N' > 0 {
+		 		loc showidcount `=_N'
+		 		return scalar showid = `showidcount'
+		 		if `showidcount' > 0 {
 		 			gsort -_iderror_rate
 		 			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate
 		 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate ///
 		 			using "`filename'", sheet("IDs") firstrow(varl) cell(B3)
 		 			mata: format_showids("`filename'", "IDs")
 		 		}
-	 		}
 		
 			if `showid' > `idmin' & `showid' < `idmax' {
 				dis as err "opt showid (`showid') is higher than the number of comparisons for at least one observation (`idmin')." 
