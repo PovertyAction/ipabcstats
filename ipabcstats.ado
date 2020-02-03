@@ -391,7 +391,7 @@ program ipabcstats, rclass
 			loc _backchecked `=_N'
 			return scalar bc = `_backchecked'
 			return scalar survey = `_surveyed'
-			
+			loc pct_bc : piece 1 4 of  "`=(`_backchecked' / `_surveyed')*100'"
 			unab admin:	`id' `enumerator' `enumteam' `backchecker' `bcteam' `surveydate' `bcdate'
 			save `_mdata', replace
 
@@ -1228,7 +1228,7 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 	b.put_string(6, 5, date)
 
 	b.put_string(7, 3, "Backcheck Rate: ")
-	b.put_string(7, 5, st_local("_backchecked") + " / " + st_local("_surveyed"))
+	b.put_string(7, 5, st_local("_backchecked") + " / " + st_local("_surveyed") + " (" + st_local("pct_bc") + "%)")
 
 	b.put_string(8, 3, "Survey Data:")
 	b.put_string(8, 5, st_local("surveydata"))
