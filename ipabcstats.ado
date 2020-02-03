@@ -597,7 +597,7 @@ program ipabcstats, rclass
 			bysort `id' : gen first = _n
 			sum days if first == 1
 			loc days_diff : piece 1 4 of  "`r(mean)'"
-			return scalar avg_days = `days_diff'
+			return scalar avd = `days_diff'
 
 			* export comparison/differences
 			gen result = cond(_vdiff == ., "not compared", cond(!_vdiff, "not different", "different"))
@@ -726,8 +726,8 @@ program ipabcstats, rclass
 			matrix coln `rates' = "variables" "values" "differences" "error rate" 
 			matrix rown `rates' = "type 1" "type 2" "type 3" "total"
 			return matrix rates = `rates'
-			loc total `=error_rate[4]'
-			return scalar errorrate = `total'
+			loc total : piece 1 4 of "`=error_rate[4]'"
+			return scalar total_rate = `total'
 			export excel using "`filename'", sheet("summary") `replace' first(varlabel) cell(C11)
 			loc directory "`c(tmpdir)'"
 			mata: add_summary_formatting("`filename'", "summary", "`c(current_date)'")
@@ -870,8 +870,9 @@ program ipabcstats, rclass
 			return matrix enum = enum
 			
 			replace backcheck_percent = round(backcheck_percent * 100, 0.01)
-			mkmat `enumerator' backcheck_percent, matrix(enum_bcp)
-			return matrix enum_bcp = enum_bcp
+			mkmat `enumerator' backcheck_percent, matrix(enum_bc)
+			matrix coln enum_bc = `enumerator' "bc_pct"
+			return matrix enum_bc = enum_bc
 		
 			if "`enumteam'" ~= "" {
 				create_stats using "`_diffs'", enum(`enumteam') enumdata("`_enumteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enum team) `nolabel'
@@ -892,8 +893,8 @@ program ipabcstats, rclass
 				return matrix enumteam = enumteam
 				
 				replace backcheck_percent = round(backcheck_percent * 100, 0.01)
-				mkmat `enumteam' backcheck_percent, matrix(enumteam_bcp)
-				return matrix enumteam_bcp = enumteam_bcp
+				mkmat `enumteam' backcheck_percent, matrix(enumteam_bc)
+				return matrix enumteam_bc = enumteam_bc
 			}
 			
 			create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(backchecker) `nolabel'
