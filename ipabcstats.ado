@@ -392,10 +392,14 @@ program ipabcstats, rclass
 			loc survey_only `r(N)'
 			count if _mergebc == 2
 			loc bc_only `r(N)'
-			
+			loc _surveyed `=_N'
+
 			keep if inlist(_mergebc, 2, 3)
-
-
+			
+			loc _backchecked `=_N'
+			return scalar bc = `_backchecked'
+			return scalar survey = `_surveyed'
+			loc pct_bc : piece 1 4 of  "`=(`_backchecked' / `_surveyed')*100'"
 			unab admin:	`id' `enumerator' `enumteam' `backchecker' `bcteam' `surveydate' `bcdate'
 			save `_mdata', replace
 
@@ -593,6 +597,7 @@ program ipabcstats, rclass
 			bysort `id' : gen first = _n
 			sum days if first == 1
 			loc days_diff : piece 1 4 of  "`r(mean)'"
+			return scalar avg_days = `days_diff'
 
 			* export comparison/differences
 			gen result = cond(_vdiff == ., "not compared", cond(!_vdiff, "not different", "different"))
@@ -676,15 +681,20 @@ program ipabcstats, rclass
 			gen error_rate_total = round((_vdifftotal / valcounttotal) * 100, 0.01)
 			lab var error_rate_total "Total" 
 
+			tempname rates_`unit'
+			mkmat `unit' error_rate*, matrix(`rates_`unit'')
+			return matrix rates_`unit' = `rates_`unit''
+
 			graph drop _all
 			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") ///
 			scheme(s1color) name(summary) ytitle("%") lwidth(thin thin thin thick) lpattern(dash dash dash solid)
 			graph export "`c(tmpdir)'errorrates.png", width(460) replace name(summary)
 			graph close
 			drop error_rate*
-			reshape long _vdiff valcount, i(`unit') j(vartype)
 
+			reshape long _vdiff valcount, i(`unit') j(vartype)
 			collapse (sum) valcount _vdiff, by(vartype)
+
 
 			set obs 4
 			replace vartype = 4 in 4
@@ -710,10 +720,47 @@ program ipabcstats, rclass
 			lab var error_rate "Error rate (%)"
 			lab var vartype "Type"
 
+			* summary page matrix
+			tempname rates
+			mkmat varcount valcount _vdiff error_rate, matrix(`rates')
+			matrix coln `rates' = "variables" "values" "differences" "error rate" 
+			matrix rown `rates' = "type 1" "type 2" "type 3" "total"
+			return matrix rates = `rates'
+			loc total `=error_rate[4]'
+			return scalar errorrate = `total'
 			export excel using "`filename'", sheet("summary") `replace' first(varlabel) cell(C11)
 			loc directory "`c(tmpdir)'"
 			mata: add_summary_formatting("`filename'", "summary", "`c(current_date)'")
 			
+			return scalar bc_only = `bc_only'
+			* export bc only IDs
+			if `bc_only' > 0 {
+				use `_bconly', clear
+				keep if _mergebc == 2
+				keep `id' `backchecker' `bcteam' _bc*
+				ds _bc*
+				loc bcexportvars
+				foreach var in `r(varlist)' {
+					loc stub = substr("`var'", 4, .)
+					ren `var' `stub'
+					loc bcexportvars `bcexportvars' `stub'
+				}
+
+				if "`nolabel'" == "" { 
+					ds `id' `backchecker' `bcteam' `bcexportvars', has(vallab) 
+					foreach var in `r(varlist)'	{
+						decode `var', gen(`var'_new)
+						order `var'_new, after(`var')
+						drop `var'
+						ren `var'_new `var'
+						lab var `var' "`var'"	 
+					}
+				}
+				sort `id' `backchecker' `bcteam' `bcexportvars'
+				export excel `id' `bcexportvars' using "`filename'", sheet("backcheck only", modify) first(var) cell(B3)  `nolabel'
+				mata: format_bconlyids("`filename'", "backcheck only")
+			}
+
 			* create showid
 			use `_cdata', clear
 
@@ -730,18 +777,17 @@ program ipabcstats, rclass
 	 		loc idmax = `r(max)'
 
 
-			else {
 		 		if "`percent'" == "1" keep if _iderror_rate > `showid' & count == 1
 		 		else keep if _iddifferences > `showid' & count == 1
-
-		 		if `=_N' > 0 {
+		 		loc showidcount `=_N'
+		 		return scalar showid = `showidcount'
+		 		if `showidcount' > 0 {
 		 			gsort -_iderror_rate
 		 			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate
 		 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate ///
 		 			using "`filename'", sheet("IDs") firstrow(varl) cell(B3)
 		 			mata: format_showids("`filename'", "IDs")
 		 		}
-	 		}
 		
 			if `showid' > `idmin' & `showid' < `idmax' {
 				dis as err "opt showid (`showid') is higher than the number of comparisons for at least one observation (`idmin')." 
@@ -1285,9 +1331,11 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 	b.put_string(2, 3, "Back Check Analysis")
 	b.put_string(4, 3, "Average Days between Survey and Backcheck: " + st_local("days_diff") ) 
 
-
 	b.put_string(6, 3, "Date: ")
 	b.put_string(6, 5, date)
+
+	b.put_string(7, 3, "Backcheck Rate: ")
+	b.put_string(7, 5, st_local("_backchecked") + " / " + st_local("_surveyed") + " (" + st_local("pct_bc") + "%)")
 
 	b.put_string(8, 3, "Survey Data:")
 	b.put_string(8, 5, st_local("surveydata"))
@@ -1418,8 +1466,8 @@ void format_comparison(string scalar filename, string scalar sheetname)
 }
 
 
-void format_showids (string scalar filename, string scalar sheetname) {
 
+void format_showids (string scalar filename, string scalar sheetname) {
 	class xl scalar b 
 	real scalar nrows, nvars
 
@@ -1529,5 +1577,55 @@ void format_varstats (string scalar filename, string scalar sheetname, real scal
 
 	b.close_book()
 }
+
+void format_bconlyids (string scalar filename, string scalar sheetname) {
+	class xl scalar b 
+	real scalar nrows, nvars
+
+
+	b = xl()
+	nrows = st_nobs() + 3
+	nvars = st_nvar()
+	b.load_book(filename)
+	b.set_sheet(sheetname)
+	b.set_mode("open")
+
+	b.set_right_border((3, nrows), 1, "medium")
+	//b.set_right_border((3, nrows), nvars - 3, "medium")
+	b.set_right_border((3, nrows), nvars, "medium")
+	b.set_top_border((3, 4), (2, nvars), "medium")
+	b.set_bottom_border(nrows, (2, nvars), "medium")
+	
+	//b.set_column_width(nvars - 2, nvars, 10)
+	b.set_column_width(1, 1, 1)
+
+	for(i = 1; i <= nvars; i++) {
+		collen = colmax(strlen(st_sdata(., i)))
+//		namelen = strlen(st_varname(i))
+
+		if (st_varname(i) == st_local("surveydate") | st_varname(i) == st_local("bcdate") | st_varname(i) == "starttime" | st_varname(i) == "endtime" | st_varname(i) == "submissiondate") {
+			namelen = 16
+		} 
+		else namelen = strlen(st_varname(i))
+
+		if (namelen > collen) {
+			collen = namelen
+		}
+
+
+
+		b.set_column_width(i, i, collen)
+	}
+
+
+	b.set_horizontal_align((3, nrows), (2, nvars), "center")
+	b.set_row_height(1, 1, 10)
+	b.set_column_width(1, 1, 1)
+
+	b.close_book()
+
+}
+
+
 
 end
