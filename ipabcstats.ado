@@ -46,15 +46,23 @@ program ipabcstats, rclass
 		* check syntax
 		* check that at least one variable is specified in t1, t2 or t3
 		if "`t1vars'`t2vars'`t3vars'" == "" {
-			disp as err "option level incorrectly specified: must specify, at minimum, one of options t1vars(), t2vars(), or t3vars()"
+			disp as err "variables incorrectly specified: must specify, at minimum, one of options t1vars(), t2vars(), or t3vars()"
 			ex 198
 		}
 
-		* check level
-		if `level' ~= -1 & "`ttest'`prtest'" ~= "" {
+		* check level		
+		if `level' ~= -1 & "`ttest'`prtest'" == "" {
 			di as err "option level must be specified with option ttest or option prtest"
 			ex 198
 		}
+		if `level' == -1 loc level = c(level)
+		else {
+			if !inrange(`level', 10, 99.99) {
+				di as err "level() must be between 10 and 99.99 inclusive"
+				ex 198
+			}
+		}
+
 				 
 		* check showid
 		if "`showid'" == "" loc showid "30%"
@@ -160,7 +168,7 @@ program ipabcstats, rclass
 		}
 		
 		* temp datasets and vars
-		tempfile _sdata _bdata _mdata _diffs _cdata _enumdata _enumteamdata _bcerdata _bcerteamdata _checks _fmdata _bconly _bcavgdata _bcteamavgdata
+		tempfile _sdata _bdata _mdata _diffs _cdata _enumdata _enumteamdata _bcerdata _bcerteamdata _checks _fmdata _bconly _bcavgdata _bcteamavgdata _varstats
 
 		qui {
 			* import only relevant variables in survey dataset
@@ -803,13 +811,43 @@ program ipabcstats, rclass
 			export excel using "`filename'", sheet("enumerator stats", replace) first(varl) cell(B3)
 			gen _a = "", before(`enumerator')
 			mata: format_enumstats("`filename'", "enumerator stats", "`enumerator'", 0)
+
+			forval i = 3(-1)1 {
+				cap confirm var error_rate`i'
+				if !_rc {
+					mkmat `enumerator' error_rate`i', matrix(enum`i')
+					return matrix enum`i' = enum`i' 
+				}
+			}
+
+			mkmat `enumerator' error_rate, matrix(enum)
+			return matrix enum = enum
 			
+			replace backcheck_percent = round(backcheck_percent * 100, 0.01)
+			mkmat `enumerator' backcheck_percent, matrix(enum_bcp)
+			return matrix enum_bcp = enum_bcp
+		
 			if "`enumteam'" ~= "" {
 				create_stats using "`_diffs'", enum(`enumteam') enumdata("`_enumteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enum team) `nolabel'
 				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
 				export excel using "`filename'", sheet("enumerator team stats", replace) first(varl) cell(B3)
 				gen _a = "", before(`enumteam')
 				mata: format_enumstats("`filename'", "enumerator team stats", "`enumteam'", 0)
+
+				forval i = 3(-1)1 {
+					cap confirm var error_rate`i'
+					if !_rc {
+						mkmat `enumteam' error_rate`i', matrix(enumteam`i')
+						return matrix enumteam`i' = enumteam`i'
+					}
+				}
+
+				mkmat `enumteam' error_rate, matrix(enumteam)
+				return matrix enumteam = enumteam
+				
+				replace backcheck_percent = round(backcheck_percent * 100, 0.01)
+				mkmat `enumteam' backcheck_percent, matrix(enumteam_bcp)
+				return matrix enumteam_bcp = enumteam_bcp
 			}
 			
 			create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(backchecker) `nolabel'
@@ -820,6 +858,21 @@ program ipabcstats, rclass
 			gen _a = ""
 			mata: format_enumstats("`filename'", "backchecker stats", "`backchecker'", 1)
 
+			forval i = 3(-1)1 {
+				cap confirm var error_rate`i'
+				if !_rc {
+					mkmat `backchecker' error_rate`i', matrix(backchecker`i')
+					return matrix backchecker`i' = backchecker`i' 
+				}
+			}
+
+			mkmat `backchecker' error_rate, matrix(backchecker)
+			return matrix backchecker = backchecker
+			
+			ren days average_days
+			mkmat `backchecker' average_days, matrix(backchecker_avd)
+			return matrix backchecker_avd = backchecker_avd
+
 			if "`bcteam'" ~= "" {
 				create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(bc team) `nolabel'
 				merge 1:1 `bcteam' using `_bcteamavgdata', nogen
@@ -828,6 +881,21 @@ program ipabcstats, rclass
 				export excel using "`filename'", sheet("backchecker team stats", replace) first(varl) cell(B3)
 				gen _a = ""
 				mata: format_enumstats("`filename'", "backchecker team stats", "`bcteam'", 1)
+
+				forval i = 3(-1)1 {
+					cap confirm var error_rate`i'
+					if !_rc {
+						mkmat `bcteam' error_rate`i', matrix(bcteam)
+						return matrix bcteam`i' = bcteam`i'
+					}
+				}
+
+				mkmat `bcteam' error_rate, matrix(bcteam)
+				return matrix bcteam = bcteam
+				
+				ren days average_days
+				mkmat `bcteam' average_days, matrix(bcteam_avd)
+				return matrix bcteam_avd = bcteam_avd
 			}
 
 
@@ -843,7 +911,7 @@ program ipabcstats, rclass
 			destring _survey _backcheck, force replace
 
 			foreach var in `tvars' {
-				loc type = cond(`:list var in t1vars', "type 1", cond(`:list var in t2vars', "type 2", "type3"))
+				loc type = cond(`:list var in t1vars', "type 1", cond(`:list var in t2vars', "type 2", "type 3"))
 				count if _vdiff == 1 & _vvar == "`var'"
 				loc diff `r(N)'
 				count if _compared & _vvar == "`var'"
@@ -879,13 +947,13 @@ program ipabcstats, rclass
 				}
 
 				if `:list var in ttest' {
-					ttest _survey == _backcheck if _compared & _vvar == "`var'"
+					ttest _survey == _backcheck if _compared & _vvar == "`var'", level(`level')
 					loc test 			"ttest"
 					loc pvalue 			`r(p)'
 				}
 				else if `:list var in prtest' {
 					
-					prtest _survey == _backcheck if _compared & _vvar == "`var'"
+					prtest _survey == _backcheck if _compared & _vvar == "`var'", level(`level')
 					loc test 			"prtest"
 					loc pvalue 			`r(p)'
 				}
@@ -930,7 +998,46 @@ program ipabcstats, rclass
 			loc mt = cond("`ttest'`prtest'`signrank'" ~= "", 1, 0)
 			loc rlb = cond("`reliability'" ~= "", 1, 0)
 			noi mata: format_varstats("`filename'", "variable stats", `mt', `rlb')
+			
+			* save enumerator statistics
+			save `_varstats', replace
 
+			* get return values for variable stats
+			* error_rates for type 1, type 2, type 3 and all
+			forval i = 3(-1)0 {
+				if `i' == 0 use variable type error_rate using `_varstats', clear
+				else use variable type error_rate if type == "type `i'" using `_varstats', clear
+				drop type
+				if `=_N' > 0 {
+					gen _id = 1
+					ren error_rate V_
+					reshape wide V_, i(_id) j(variable) str
+					ren V_* *
+					drop _id
+					mkmat _all, matrix(matname)
+					if `i' == 0 return matrix var = matname, copy
+					else return matrix var`i' = matname, copy
+				}	
+			} 
+			
+			* error_rate for ttest prtest signrank and reliability
+			foreach test in ttest prtest signrank reliability {
+				foreach i of numlist 3 2 0 {
+					if `i' == 0 use variable type test pvalue if test == "`test'" using `_varstats', clear
+					else use variable type test pvalue if test == "`test'" & type == "type `i'" using `_varstats', clear
+					if `=_N' > 0 {
+						drop type test
+						gen _id = 1
+						ren pvalue V_
+						reshape wide V_, i(_id) j(variable) str
+						ren V_* *
+						drop _id
+						mkmat _all, matrix(matname)
+						if `i' == 0 return matrix `test' matname, copy
+						else return matrix `test'`i' matname, copy
+					}
+				}
+			}
 		}	
 
 	use `_originaldata', clear
@@ -1026,8 +1133,8 @@ program define create_stats, rclass
 	recode `r(varlist)' (. = 0) // recode missing/no comparisons to 0
 
 	return local type1 = `type1'
-	return local type1 = `type2'
-	return local type1 = `type3'
+	return local type2 = `type2'
+	return local type3 = `type3'
 
 end
 
