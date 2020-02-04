@@ -259,35 +259,64 @@ the back check survey version.{p_end}
 {* Using -help describe- as a template.}{...}
 {synoptset 20 tabbed}{...}
 {p2col 5 20 24 2: Scalars}{p_end}
-{synopt:{cmd:r(showid1)}}1 if {opt showid()} displayed
-unique IDs for type 1 variables and 0 otherwise{p_end}
-{synopt:{cmd:r(showid2)}}1 if {opt showid()} displayed
-unique IDs for type 2 variables and 0 otherwise{p_end}
+{synopt:{cmd:r(showid)}}1 if {opt showid()} displayed
+number of IDs over the threshold specified in {opt showid}{p_end}
+{synopt:{cmd:r(bc_only)}}1 number of IDs only in backcheck data {p_end}
+{synopt:{cmd:r(total_rate)}}1 total error rate {p_end}
+{synopt:{cmd:r(avd)}}1 average days between survey and backcheck {p_end}
+{synopt:{cmd:r(survey)}}1 number of survey observations {p_end}
+{synopt:{cmd:r(bc)}}1 number of backcheck observations {p_end}
 
 {p2col 5 20 24 2: Matrices}{p_end}
+{synopt:{cmd:r(enum)}}the total error rates of all enumerators{p_end}
 {synopt:{cmd:r(enum1)}}the type 1 variable error rates of all enumerators{p_end}
 {synopt:{cmd:r(enum2)}}the type 2 variable error rates of all enumerators{p_end}
+{synopt:{cmd:r(enum3)}}the type 3 variable error rates of all enumerators{p_end}
+{synopt:{cmd:r(backchecker)}}the total error rates of
+the back checkers{p_end}
 {synopt:{cmd:r(backchecker1)}}the type 1 variable error rates of
 the back checkers{p_end}
 {synopt:{cmd:r(backchecker2)}}the type 2 variable error rates of
 the back checkers{p_end}
+{synopt:{cmd:r(backchecker3)}}the type 3 variable error rates of
+the back checkers{p_end}
+{synopt:{cmd:r(enumteam)}}the total error rates of
+the enumerator teams{p_end}
 {synopt:{cmd:r(enumteam1)}}the type 1 variable error rates of
 the enumerator teams{p_end}
 {synopt:{cmd:r(enumteam2)}}the type 2 variable error rates of
 the enumerator teams{p_end}
+{synopt:{cmd:r(enumteam3)}}the type 3 variable error rates of
+the enumerator teams{p_end}
+
+{synopt:{cmd:r(bcteam)}}the total error rates of
+the back checker teams{p_end}
 {synopt:{cmd:r(bcteam1)}}the type 1 variable error rates of
 the back checker teams{p_end}
 {synopt:{cmd:r(bcteam2)}}the type 2 variable error rates of
 the back checker teams{p_end}
+{synopt:{cmd:r(bcteam3)}}the type 3 variable error rates of
+the back checker teams{p_end}
+
+{synopt:{cmd:r(var)}}the error rates of all variables{p_end}
 {synopt:{cmd:r(var1)}}the error rates of all type 1 variables{p_end}
 {synopt:{cmd:r(var2)}}the error rates of all type 2 variables{p_end}
 {synopt:{cmd:r(var3)}}the error rates of all type 3 variables{p_end}
+{synopt:{cmd:r(ttest)}}the results of {cmd:ttest} for selected variables{p_end}
 {synopt:{cmd:r(ttest2)}}the results of {cmd:ttest} for type 2 variables{p_end}
 {synopt:{cmd:r(ttest3)}}the results of {cmd:ttest} for type 3 variables{p_end}
+{synopt:{cmd:r(signrank)}}the results of {cmd:signrank} for selected variables{p_end}
 {synopt:{cmd:r(signrank2)}}the results of {cmd:signrank} for
 type 2 variables{p_end}
 {synopt:{cmd:r(signrank3)}}the results of {cmd:signrank} for
 type 3 variables{p_end}
+{synopt:{cmd:r(prtest)}}the results of {cmd:prtest} for selected variables{p_end}
+{synopt:{cmd:r(prtest2)}}the results of {cmd:prtest} for type 2 variables{p_end}
+{synopt:{cmd:r(prtest3)}}the results of {cmd:prtest} for type 3 variables{p_end}
+
+{synopt:{cmd:r(enum_bc)}}percentage of surveys backchecked for all enumerators {p_end}
+{synopt:{cmd:r(rates)}}error rates by variable type {p_end}
+{synopt:{cmd:r(rates_unit)}}error rates by variable type over time{p_end}
 {p2colreset}{...}
 
 
