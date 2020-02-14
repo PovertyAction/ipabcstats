@@ -174,7 +174,7 @@ program ipabcstats, rclass
 			* import only relevant variables in survey dataset
 			use `id' `t1vars' `t2vars' `t3vars' `enumerator' `enumteam'  ///
 				`ttest' `signrank' `prtest' `reliability' `keepsurvey' `surveydate' ///
-				using `surveydata', clear 
+				using "`surveydata'", clear 
 
 			* check that datsets is unique on id
 			isid `id'
@@ -315,7 +315,7 @@ program ipabcstats, rclass
 			* import only relevant variables in bcdata
 			use `id' `t1vars' `t2vars' `t3vars' `backchecker' `bcteam'  ///
 				`ttest' `signrank' `prtest' `reliability' `keepbc' `bcdate'	 	///
-				using `bcdata', clear
+				using "`bcdata'", clear
 
 			* check that datsets is unique on id
 			isid `id'
