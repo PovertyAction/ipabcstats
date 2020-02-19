@@ -82,6 +82,15 @@ program ipabcstats, rclass
 			ex 198
 		}
 		
+		* check if file exists and replace is specified
+		if "`replace'" == "" {
+			cap confirm file "`filename'"
+			if !_rc {
+				dis as err "file `filename' already exists. Specify new filename or use -replace- option."
+				ex 602
+			}
+		}
+
 		* parse okrange
 		if "`okrange'" ~= "" {
 			loc okrange = subinstr("`okrange'", " ", "", .)
