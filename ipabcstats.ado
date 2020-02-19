@@ -1068,20 +1068,22 @@ program ipabcstats, rclass
 			} 
 			
 			* error_rate for ttest prtest signrank and reliability
-			foreach test in ttest prtest signrank reliability {
-				foreach i of numlist 3 2 0 {
-					if `i' == 0 use variable type test pvalue if test == "`test'" using `_varstats', clear
-					else use variable type test pvalue if test == "`test'" & type == "type `i'" using `_varstats', clear
-					if `=_N' > 0 {
-						drop type test
-						gen _id = 1
-						ren pvalue V_
-						reshape wide V_, i(_id) j(variable) str
-						ren V_* *
-						drop _id
-						mkmat _all, matrix(matname)
-						if `i' == 0 return matrix `test' matname, copy
-						else return matrix `test'`i' matname, copy
+			if "`ttest'`prtest'`signrank'`reliability'" ~= "" {
+				foreach test in ttest prtest signrank reliability {
+					foreach i of numlist 3 2 0 {
+						if `i' == 0 use variable type test pvalue if test == "`test'" using `_varstats', clear
+						else use variable type test pvalue if test == "`test'" & type == "type `i'" using `_varstats', clear
+						if `=_N' > 0 {
+							drop type test
+							gen _id = 1
+							ren pvalue V_
+							reshape wide V_, i(_id) j(variable) str
+							ren V_* *
+							drop _id
+							mkmat _all, matrix(matname)
+							if `i' == 0 return matrix `test' matname, copy
+							else return matrix `test'`i' matname, copy
+						}
 					}
 				}
 			}
