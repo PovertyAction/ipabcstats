@@ -13,10 +13,6 @@ Wishlist:
 
 */
 
-cap program drop ipabcstats
-cap program drop change_str
-cap program drop create_stats
-
 program ipabcstats, rclass
     version 	14.2
     cap version 15.1 /* written in stata 15.1 but will run on stata 14.2 */ 
@@ -1104,7 +1100,7 @@ end
 
 * program to remove symbols, trim and change cases of string values
 program define change_str
-	syntax varlist [, nosymbol trim upper lower]
+	syntax varlist [, NOSymbol trim upper lower]
 
 	ds, has(type string)
 	if `:word count `r(varlist)'' > 0 {
