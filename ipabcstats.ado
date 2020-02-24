@@ -59,6 +59,30 @@ program ipabcstats, rclass
 			}
 		}
 
+		* ensure file is .xlsx
+		loc ext = substr("`filename'", -(strpos(reverse("`filename'"), ".")), .)
+		noi dis "`ext'"
+		
+		if "`ext'" == ".xls" | "`ext'" == ".xlsx" | "`ext'" == "" {
+
+			if "`ext'" == ".xls" {
+
+				noi dis "File must be exported in .xlsx format. Adjusting file extension to .xlsx."
+				loc fileroot = substr("`filename'", 1, (strpos("`filename'", "."))-1)
+				loc filename = "`fileroot'.xlsx"
+			}
+			if "`ext'" == "" {
+				loc filename = "`filename'.xlsx"
+			}
+		}
+		
+		else {
+			di as err "file type `ext' not allowed. File must be in .xlsx format"
+			ex 609 
+		}
+
+
+
 				 
 		* check showid
 		if "`showid'" == "" loc showid "30%"
