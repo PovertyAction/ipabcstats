@@ -212,6 +212,24 @@ program ipabcstats, rclass
 				ex 459
 			} 
 
+
+			* set warning if ID is long
+			cap confirm string variable `id' 
+			if `_rc' != 0 {
+				summ `id'
+				if abs(floor(log10(`r(max)'))) + 1 > 20 {
+					nois di as error "Warning: cannot reversibly convert `id' to string without loss of precision. Consider using a different ID or convert yourself."
+					nois di as error "Columns widths may not automatically adjust for this variable."
+				}
+				else if abs(floor(log10(`r(max)'))) + 1 > 8 {
+					nois di as error "Warning: using large numeric IDs may result in loss of precision. Consider converting to string!"
+					nois di as error "Columns widths may not automatically adjust for this variable."
+				}
+				tostring `varlist', replace force format("%20.0g")
+			}
+
+
+
 			* check that no variable is prefixed with _bc
 			cap ds _bc*
 			if !_rc {
