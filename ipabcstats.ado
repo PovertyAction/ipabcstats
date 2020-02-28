@@ -61,7 +61,6 @@ program ipabcstats, rclass
 
 		* ensure file is .xlsx
 		loc ext = substr("`filename'", -(strpos(reverse("`filename'"), ".")), .)
-		noi dis "`ext'"
 		
 		if "`ext'" == ".xls" | "`ext'" == ".xlsx" | "`ext'" == "" {
 
@@ -215,7 +214,7 @@ program ipabcstats, rclass
 
 			* set warning if ID is long
 			cap confirm string variable `id' 
-			if `_rc' != 0 {
+			if _rc != 0 {
 				summ `id'
 				if abs(floor(log10(`r(max)'))) + 1 > 20 {
 					nois di as error "Warning: cannot reversibly convert `id' to string without loss of precision. Consider using a different ID or convert yourself."
@@ -225,7 +224,6 @@ program ipabcstats, rclass
 					nois di as error "Warning: using large numeric IDs may result in loss of precision. Consider converting to string!"
 					nois di as error "Columns widths may not automatically adjust for this variable."
 				}
-				tostring `varlist', replace force format("%20.0g")
 			}
 
 
@@ -1351,6 +1349,7 @@ void adjust_column_width(string scalar filename, string scalar sheetname)
 		
 		if (column_width > 101) {
 			column_width = 101
+			b.set_text_wrap((1, nrows), i, "on")
 		}	
 		if (i==1) {
 			column_width = 1
