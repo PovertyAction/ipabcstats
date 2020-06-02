@@ -607,11 +607,17 @@ program ipabcstats, rclass
 					gen _survey    = `var'
 					gen _backcheck = _bc`var' 
 				}
-				else {
-					tostring `var', gen (_survey) format(%100.0f)
-					tostring _bc`var', gen (_backcheck) format(%100.0f)
+				tostring `var', gen (_survey) format(%100.0f)
 					cap decode `var'	, gen (_surveylab)
+					if _rc == 182 {
+						gen _surveylab = ""
+					}					
+					tostring _bc`var', gen (_backcheck) format(%100.0f)
 					cap decode _bc`var'	, gen (_backchecklab)
+					if _rc == 182 {
+						gen _backchecklab = ""
+						replace _surveylab = ""
+					}
 				}
 
 				gen _seq 	= `i'
