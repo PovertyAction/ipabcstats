@@ -607,7 +607,8 @@ program ipabcstats, rclass
 					gen _survey    = `var'
 					gen _backcheck = _bc`var' 
 				}
-				tostring `var', gen (_survey) format(%100.0f)
+				else {
+					tostring `var', gen (_survey) format(%100.0f)
 					cap decode `var'	, gen (_surveylab)
 					if _rc == 182 {
 						gen _surveylab = ""
