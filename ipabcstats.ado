@@ -452,8 +452,21 @@ program ipabcstats, rclass
 
 			use `_mdata', clear
 			keep if _mergebc == 3
+			
+			* convert dates to %td format
+			* check that date is in %td format, else convert
+			foreach var of varlist `surveydate' `bcdate' {
+				if "`:format `var''" ~= "%td" {
+					gen _td`var' = dofc(`var') 
+					format %td _td`var'
+					drop `var'
+					ren _td`var' `var'
+				}
+			}
+			
+			* save merged dataset
 			save `_mdata', replace 
-
+			
 			* keep data of number of survey back checked by enumerator and enumteam
 			keep `enumerator'
 			bys `enumerator': gen backchecks = _N
@@ -471,28 +484,27 @@ program ipabcstats, rclass
 				order `enumteam' surveys backchecks
 				save `_enumteamdata', replace
 			}
-
+			
 			* calculate average days between surveys and back checks bcers
 			use `_mdata', clear
 			keep `backchecker' `surveydate' `bcdate'
-			gen days = dofc(`bcdate') - dofc(`surveydate')
+			gen days = `bcdate' - `surveydate'
 			order `backchecker' days
 			collapse (mean) days, by (`backchecker')
 			lab var days "average days"
 			save `_bcavgdata'
-
-
+			
 			* calculate average days between surveys and back checks for bcer teams
 			if "`bcteam'" ~= "" {
 				use `_mdata', clear
 				keep `bcteam' `surveydate' `bcdate'
-				gen days = dofc(`bcdate') - dofc(`surveydate')
+				gen days = `bcdate' - `surveydate'
 				order `bcteam' days
 				collapse (mean) days, by (`bcteam')
 				lab var days "average days"
 				save `_bcteamavgdata'
 			}
-
+			
 			* foreach variable compare and save comparison in long format
 			clear
 			save `_diffs', emptyok
@@ -630,17 +642,16 @@ program ipabcstats, rclass
 				save `_diffs', replace
 			}
 			
-
 			* rename variables in comparison data
 			ren (_vtype _vvar _vvlab _survey _backcheck) ///
 				(type variable label survey backcheck)
 
 			cap ren (_surveylab _backchecklab) ///
 					(surveylabel backchecklabel)			
-	
+			
 			* create days difference variable
-			gen _surveyday = dofc(`surveydate')
-			gen _bcday = dofc(`bcdate')
+			gen _surveyday = `surveydate' 
+			gen _bcday 	   = `bcdate'
 			
 			format _surveyday _bcday %td
 			gen days = _bcday - _surveyday
@@ -660,7 +671,7 @@ program ipabcstats, rclass
 			foreach name of varlist survey surveylabel backcheck backchecklabel `id' `enumerator' `enumteam' `backchecker' `bcteam' `keepsurvey' {
 				lab var `name' "`name'"
 			}
-
+			
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel ///
 			 backcheck backchecklabel result `keepsurvey' `bc_keepbc' `surveydate' `bcdate' days ///
 			 _surveyday _vdiff
