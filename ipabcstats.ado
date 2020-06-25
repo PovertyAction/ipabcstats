@@ -541,7 +541,7 @@ program ipabcstats, rclass
 						} 
 					}
 				}
-
+				
 				* generate variable to mark if values are different
 				gen _vdiff = `var' ~= _bc`var' if _compared == 1
 				
@@ -605,7 +605,7 @@ program ipabcstats, rclass
 						}
 					}
 				}
-
+				
 				* generate variable to hold variable name
 				gen _vvar = "`var'"
 
@@ -619,22 +619,24 @@ program ipabcstats, rclass
 					gen _backcheck = _bc`var' 
 				}
 				else {
-					tostring `var', gen (_survey) format(%100.0f)
+					* use display format
+					noi tostring `var', gen (_survey) usedisplayformat force
 					cap decode `var'	, gen (_surveylab)
 					if _rc == 182 {
 						gen _surveylab = ""
 					}					
-					tostring _bc`var', gen (_backcheck) format(%100.0f)
+					tostring _bc`var', gen (_backcheck) usedisplayformat force
 					cap decode _bc`var'	, gen (_backchecklab)
 					if _rc == 182 {
 						gen _backchecklab = ""
 						replace _surveylab = ""
 					}
 				}
-
+				
 				gen _seq 	= `i'
 				loc ++i
 				gen _seqid 	= _n 
+
 
 				keep `admin' `keepsurvey' `bc_keepbc' _v* _survey* _backcheck* _seq* _compared `surveydate' `bcdate'
 
