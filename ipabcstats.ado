@@ -79,9 +79,6 @@ program ipabcstats, rclass
 			di as err "file type `ext' not allowed. File must be in .xlsx format"
 			ex 609 
 		}
-
-
-
 				 
 		* check showid
 		if "`showid'" == "" loc showid "30%"
@@ -306,7 +303,7 @@ program ipabcstats, rclass
 					}
 				}
 
-				* unab check vars
+				* unab check and test vars
 				if "`ttest'" ~= "" unab ttest: `ttest'
 				if "`prtest'" ~= "" unab prtest: `prtest'
 				if "`signrank'" ~= "" unab signrank: `signrank'
@@ -315,18 +312,20 @@ program ipabcstats, rclass
 
 				* check that vars specified in ttest, prtest and signrank are mutualy exclusive
 				if wordcount("`ttest' `prtest' `signrank'") > wordcount("`checkvars'") {
+					
 					loc ttest_prtest: list ttest & prtest
-					loc ttest_signrank: list ttest & signrank
-					loc prtest_signrank: list prtest & signrank
-
 					if wordcount("`ttest_prtest'") > 0 {
 						di as err `"variable(s) "`ttest_prtest'" cannot be specified in both ttest and prtest"'
 						ex 198
 					}
+
+					loc ttest_signrank: list ttest & signrank
 					if wordcount("`ttest_signrank'") > 0 {
 						di as err `"variable(s) "`ttest_signrank'" cannot be specified in both ttest and signrank"'
 						ex 198
 					}
+
+					loc prtest_signrank: list prtest & signrank
 					if wordcount("`prtest_signrank'") > 0 {
 						di as err `"variable(s) "`prtest_signrank'" cannot be specified in both prtest and signrank"'
 						ex 198
@@ -347,7 +346,7 @@ program ipabcstats, rclass
 
 			save `_enumdata'
 
-			* creare enumerator team statistics
+			* create enumerator team statistics
 			if "`enumteam'" ~= "" {
 				use `_sdata', clear
 				keep `enumteam'
@@ -507,9 +506,9 @@ program ipabcstats, rclass
 				gen _vtype = cond(`:list var in t1vars', "type 1", cond(`:list var in t2vars', "type 2", "type 3"))
 				
 				* Mark variables that need to be compared
-				if "`excludemissing'" ~= "" gen _compared = !missing(_bc`var')
+				if "`excludemissing'" ~= "" gen _compared = !missing(`var') & !missing(_bc`var') 
 				else gen _compared = 1
-
+				
 				* change to not compared for values included EXCLUDENum
 				cap confirm numeric var `var' 
 				if !_rc {
@@ -630,7 +629,7 @@ program ipabcstats, rclass
 				append using `_diffs'
 				save `_diffs', replace
 			}
-
+			
 
 			* rename variables in comparison data
 			ren (_vtype _vvar _vvlab _survey _backcheck) ///
@@ -638,13 +637,14 @@ program ipabcstats, rclass
 
 			cap ren (_surveylab _backchecklab) ///
 					(surveylabel backchecklabel)			
-
+	
 			* create days difference variable
 			gen _surveyday = dofc(`surveydate')
 			gen _bcday = dofc(`bcdate')
+			
 			format _surveyday _bcday %td
 			gen days = _bcday - _surveyday
-					
+			
 			* add average difference between survey and backcheck
 			bysort `id' : gen first = _n
 			sum days if first == 1
