@@ -109,18 +109,19 @@ program ipabcstats, rclass
 	
 		* parse okrange
 		if "`okrange'" ~= "" {
-			loc okrange = subinstr("`okrange'", " ", "", .)
+			* loc okrange = subinstr("`okrange'", " ", "", .)
 			
 			* import survey data 
 			use "`surveydata'", clear
 			
 			* count the number combinations
 			loc comb_cnt = length("`okrange'") -  length(subinstr("`okrange'", "]", "", .))
-			while length("`okrange'") > 0 {
+			while length(subinstr("`okrange'", " ", "", .)) > 0 {
 				loc okrcomb = substr("`okrange'", 1, strpos("`okrange'", "]"))
 				gettoken okrvar okrcomb: okrcomb, parse([)
-
+				
 				* Check that combo has "[", "," and "]" inspecified order
+				loc okcomb = subinstr("`okcomb'", " ", "", .)
 				cap assert (strpos("`okrcomb'", "[") > 0) & (strpos("`okrcomb'", ",") > strpos("`okrcomb'", "[")) & (strpos("`okrcomb'", "]") > strpos("`okrcomb'", ","))
 				if _rc {
 					di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
@@ -880,7 +881,7 @@ program ipabcstats, rclass
 			loc lab = substr("`bcdate'", 4, .)
 			lab var `bcdate' "`lab'"
 
-
+		
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey'  ///
 				using "`filename'", sheet("comparison") first(varl) cell(B4) `nolabel'
