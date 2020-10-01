@@ -15,7 +15,7 @@ Wishlist:
 
 program ipabcstats, rclass
     version 	14.2
-    cap version 15.1 /* written in stata 15.1 but will run on stata 14.2 */ 
+    cap version 15.1 /* written in stata 15.1 but will run in stata 14.2 */ 
 	set graphics on
    
     #d;
@@ -106,10 +106,13 @@ program ipabcstats, rclass
 				ex 602
 			}
 		}
-
+	
 		* parse okrange
 		if "`okrange'" ~= "" {
 			loc okrange = subinstr("`okrange'", " ", "", .)
+			
+			* import survey data 
+			use "`surveydata'", clear
 			
 			* count the number combinations
 			loc comb_cnt = length("`okrange'") -  length(subinstr("`okrange'", "]", "", .))
@@ -117,7 +120,7 @@ program ipabcstats, rclass
 				loc okrcomb = substr("`okrange'", 1, strpos("`okrange'", "]"))
 				gettoken okrvar okrcomb: okrcomb, parse([)
 
-				* Check that combo has "[", "," and "[" inspecified order
+				* Check that combo has "[", "," and "]" inspecified order
 				cap assert (strpos("`okrcomb'", "[") > 0) & (strpos("`okrcomb'", ",") > strpos("`okrcomb'", "[")) & (strpos("`okrcomb'", "]") > strpos("`okrcomb'", ","))
 				if _rc {
 					di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
@@ -138,14 +141,17 @@ program ipabcstats, rclass
 					di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
 					ex 198
 				}
-				else if ("`okrmin'" ~= "" & !regexm("`okrmin'", "\-|^(0)")) | ("`okrmax'" ~= "" & regexm("`okrmax'", "\-")) {
+				else if ("`okrmin'" ~= "" & !regexm("`okrmin'", "\-")) | ("`okrmax'" ~= "" & regexm("`okrmax'", "\-")) {
 					di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
 					ex 198
 				}
 
-				* substr with 0 if min or max is not specified 
-				loc okrmin = cond("`okrmin'" == "", "0", "`okrmin'")
-				loc okrmax = cond("`okrmax'" == "", "0", "`okrmax'")
+				* substr with 0 if min or max is not specified. Expand to match number of vars if wildcard was used
+				unab okrvar: `okrvar'
+				loc okc = wordcount("`okrvar'")
+				
+				loc okrmin = cond("`okrmin'" == "", "0 " * `okc', "`okrmin' " * `okc')
+				loc okrmax = cond("`okrmax'" == "", "0 " * `okc', "`okrmax' " * `okc')
 				
 				* aggregate okrvar, okrmin and okrmax
 				loc okrvars = trim(itrim("`okrvars' `okrvar'")) 
@@ -156,7 +162,7 @@ program ipabcstats, rclass
 				loc okrange = subinstr("`okrange'", ",", "", 1)		
 			}
 		}
-
+		
 		* check specifications in nodiff vs exclude
 		if "`nodiffnum'" ~= "" & "`excludenum'" ~= "" {
 			loc nv_both: list nodiffnum | excludenum
@@ -550,6 +556,7 @@ program ipabcstats, rclass
 				* Check that there is at least one difference. 
 				* Apply okrange.
 				* apply nodiffnum
+				
 				cap confirm numeric var `var'
 				if !_rc {
 					* check that the variable has an okrange
@@ -557,9 +564,9 @@ program ipabcstats, rclass
 						* check for range combination of var
 						forval j = 1/`=wordcount("`okrvars'")' {
 							loc okr_item = word("`okrvars'", `j') 
-							unab okr_item_list: `okr_item'
+							cap unab okr_item_list: `okr_item'
 							
-							if `:list var in okr_item_list' {
+							if !_rc {
 
 								loc min = word("`okrmins'", `j') 
 								loc max = word("`okrmaxs'", `j') 
@@ -569,27 +576,30 @@ program ipabcstats, rclass
 								if regexm("`min'", "%$") {
 									loc perc = subinstr("`min'", "%", "", .)
 									loc perc = abs(float(`perc')/100)
-									gen _okmin = `var' - (`perc'*`var')
+									gen _okmin = cond(`perc' == 0, `var', `var' - (`perc'*`var'))
 
 								}
-								else gen _okmin = `min'
+								else gen _okmin = cond(`min' == 0, `var', `var' + `min')
+								
 								if regexm("`max'", "%$") {
 									loc perc = subinstr("`max'", "%", "", .)
 									loc perc = abs(float(`perc')/100)
-									gen _okmax = `var' + (`perc'*`var')
+									gen _okmax = cond(`perc' == 0, `var', `var' + (`perc'*`var'))
 								}
-
-								else gen _okmax = `max'
+								else gen _okmax = cond(`max' == 0, `var', `var' + `max')
 
 								* replace comparison
 								replace _vdiff = 0 if _bc`var' >= float(_okmin) & _bc`var' <= float(_okmax) & !missing(_bc`var')
+								
+								* generate variable to show okrange message
+								gen _okrange = "okrange of [`min', `max'] is [" + string(_okmin) + ", " + string(_okmax) + "]" if _compared
 
 								continue, break
 							}
 						}
 
 					}
-
+					
 					* apply nodiff
 					if "`nodiffnum'" ~= "" {
 						replace _vdiff = 0 if inlist(_bc`var', `nodiffnum_list')
@@ -620,7 +630,7 @@ program ipabcstats, rclass
 				}
 				else {
 					* use display format
-					noi tostring `var', gen (_survey) usedisplayformat force
+					tostring `var', gen (_survey) usedisplayformat force
 					cap decode `var'	, gen (_surveylab)
 					if _rc == 182 {
 						gen _surveylab = ""
@@ -636,10 +646,13 @@ program ipabcstats, rclass
 				gen _seq 	= `i'
 				loc ++i
 				gen _seqid 	= _n 
-
-
-				keep `admin' `keepsurvey' `bc_keepbc' _v* _survey* _backcheck* _seq* _compared `surveydate' `bcdate'
-
+				
+				cap confirm var _okrange, exact
+				if !_rc {
+					keep `admin' `keepsurvey' `bc_keepbc' _v* _survey* _backcheck* _okrange _seq* _compared `surveydate' `bcdate'
+				}
+				else keep `admin' `keepsurvey' `bc_keepbc' _v* _survey* _backcheck* _seq* _compared `surveydate' `bcdate'
+				
 				append using `_diffs'
 				save `_diffs', replace
 			}
