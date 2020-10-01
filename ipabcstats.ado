@@ -45,7 +45,7 @@ program ipabcstats, rclass
 			disp as err "variables incorrectly specified: must specify, at minimum, one of options t1vars(), t2vars(), or t3vars()"
 			ex 198
 		}
-
+		
 		* check level		
 		if `level' ~= -1 & "`ttest'`prtest'" == "" {
 			di as err "option level must be specified with option ttest or option prtest"
@@ -107,63 +107,6 @@ program ipabcstats, rclass
 			}
 		}
 	
-		* parse okrange
-		if "`okrange'" ~= "" {
-			* loc okrange = subinstr("`okrange'", " ", "", .)
-			
-			* import survey data 
-			use "`surveydata'", clear
-			
-			* count the number combinations
-			loc comb_cnt = length("`okrange'") -  length(subinstr("`okrange'", "]", "", .))
-			while length(subinstr("`okrange'", " ", "", .)) > 0 {
-				loc okrcomb = substr("`okrange'", 1, strpos("`okrange'", "]"))
-				gettoken okrvar okrcomb: okrcomb, parse([)
-				
-				* Check that combo has "[", "," and "]" inspecified order
-				loc okcomb = subinstr("`okcomb'", " ", "", .)
-				cap assert (strpos("`okrcomb'", "[") > 0) & (strpos("`okrcomb'", ",") > strpos("`okrcomb'", "[")) & (strpos("`okrcomb'", "]") > strpos("`okrcomb'", ","))
-				if _rc {
-					di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
-					ex 198
-				}
-				* check that range was specified
-				else if strpos("`okrvar'", ",") > 0 {
-					di as err `"option okrange() incorrectly specified: variable list "`okrvar'" not allowed"'
-					ex 198
-				}
-				
-				* gen okrmin and okrange
-				loc okrmin = substr("`okrcomb'", strpos("`okrcomb'", "[") + 1, strpos("`okrcomb'", ",") - strpos("`okrcomb'", "[") - 1)
-				loc okrmax = substr("`okrcomb'", strpos("`okrcomb'", ",") + 1, strpos("`okrcomb'", "]") - strpos("`okrcomb'", ",") - 1)
-				* check that range specified meets requirement.
-				* ie. minumum must be prefixed by "-", at least minimum or max must be specified
-				if "`okrmin'" == "" & "`okrmax'" == "" {
-					di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
-					ex 198
-				}
-				else if ("`okrmin'" ~= "" & !regexm("`okrmin'", "\-")) | ("`okrmax'" ~= "" & regexm("`okrmax'", "\-")) {
-					di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
-					ex 198
-				}
-
-				* substr with 0 if min or max is not specified. Expand to match number of vars if wildcard was used
-				unab okrvar: `okrvar'
-				loc okc = wordcount("`okrvar'")
-				
-				loc okrmin = cond("`okrmin'" == "", "0 " * `okc', "`okrmin' " * `okc')
-				loc okrmax = cond("`okrmax'" == "", "0 " * `okc', "`okrmax' " * `okc')
-				
-				* aggregate okrvar, okrmin and okrmax
-				loc okrvars = trim(itrim("`okrvars' `okrvar'")) 
-				loc okrmins = trim(itrim("`okrmins' `okrmin'"))
-				loc okrmaxs = trim(itrim("`okrmaxs' `okrmax'"))
-				
-				loc okrange = subinstr("`okrange'", "`okrvar'`okrcomb'", "", 1)
-				loc okrange = subinstr("`okrange'", ",", "", 1)		
-			}
-		}
-		
 		* check specifications in nodiff vs exclude
 		if "`nodiffnum'" ~= "" & "`excludenum'" ~= "" {
 			loc nv_both: list nodiffnum | excludenum
@@ -230,8 +173,6 @@ program ipabcstats, rclass
 				}
 			}
 
-
-
 			* check that no variable is prefixed with _bc
 			cap ds _bc*
 			if !_rc {
@@ -254,8 +195,80 @@ program ipabcstats, rclass
 			unab t3vars: `t3vars'
 			unab tvars: `t1vars' `t2vars' `t3vars'
 			change_str `tvars', `nosymbol' `lower' `upper' `trim'
+			
+			* check that the same vars listed in keepsurvey are not listed in id, enumteam and enumerator 
+			if "`keepsurvey'" ~= "" {
+				unab keepsurvey: `keepsurvey'
+				foreach var of varlist `keepsurvey' {
+					if `:list var in id' {
+						dis as err "variable `var' not allowed in both id() and keepsurvey() options"
+						ex 198
+					}
+					if `:list var in enumerator' {
+						dis as err "variable `var' not allowed in both enumerator() and keepsurvey() options"
+						ex 198
+					}
+					if `:list var in enumteam' & "`enumteam'" ~= "" {
+						dis as err "variable `var' not allowed in both enumteam() and keepsurvey() options"
+						ex 198
+					}
+				}
+			}
+			
+			* parse okrange
+			if "`okrange'" ~= "" {
+				
+				* count the number combinations
+				loc comb_cnt = length("`okrange'") -  length(subinstr("`okrange'", "]", "", .))
+				while length(subinstr("`okrange'", " ", "", .)) > 0 {
+					loc okrcomb = substr("`okrange'", 1, strpos("`okrange'", "]"))
+					gettoken okrvar okrcomb: okrcomb, parse([)
+					
+					* Check that combo has "[", "," and "]" inspecified order
+					loc okcomb = subinstr("`okcomb'", " ", "", .)
+					cap assert (strpos("`okrcomb'", "[") > 0) & (strpos("`okrcomb'", ",") > strpos("`okrcomb'", "[")) & (strpos("`okrcomb'", "]") > strpos("`okrcomb'", ","))
+					if _rc {
+						di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
+						ex 198
+					}
+					* check that range was specified
+					else if strpos("`okrvar'", ",") > 0 {
+						di as err `"option okrange() incorrectly specified: variable list "`okrvar'" not allowed"'
+						ex 198
+					}
+					
+					* gen okrmin and okrange
+					loc okrmin = substr("`okrcomb'", strpos("`okrcomb'", "[") + 1, strpos("`okrcomb'", ",") - strpos("`okrcomb'", "[") - 1)
+					loc okrmax = substr("`okrcomb'", strpos("`okrcomb'", ",") + 1, strpos("`okrcomb'", "]") - strpos("`okrcomb'", ",") - 1)
+					* check that range specified meets requirement.
+					* ie. minumum must be prefixed by "-", at least minimum or max must be specified
+					if "`okrmin'" == "" & "`okrmax'" == "" {
+						di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
+						ex 198
+					}
+					else if ("`okrmin'" ~= "" & !regexm("`okrmin'", "\-")) | ("`okrmax'" ~= "" & regexm("`okrmax'", "\-")) {
+						di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
+						ex 198
+					}
 
-			* expand okrange variables
+					* substr with 0 if min or max is not specified. Expand to match number of vars if wildcard was used
+					unab okrvar: `okrvar'
+					loc okc = wordcount("`okrvar'")
+					
+					loc okrmin = cond("`okrmin'" == "", "0 " * `okc', "`okrmin' " * `okc')
+					loc okrmax = cond("`okrmax'" == "", "0 " * `okc', "`okrmax' " * `okc')
+					
+					* aggregate okrvar, okrmin and okrmax
+					loc okrvars = trim(itrim("`okrvars' `okrvar'")) 
+					loc okrmins = trim(itrim("`okrmins' `okrmin'"))
+					loc okrmaxs = trim(itrim("`okrmaxs' `okrmax'"))
+					
+					loc okrange = subinstr("`okrange'", "`okrvar'`okrcomb'", "", 1)
+					loc okrange = subinstr("`okrange'", ",", "", 1)		
+				}
+			}
+		
+			* check that okrange vars are in survey data
 			if "`okrvars'" ~= "" {
 				cap unab okrvars_list: `okrvars'
 				if _rc == 111 {
@@ -661,9 +674,11 @@ program ipabcstats, rclass
 			* rename variables in comparison data
 			ren (_vtype _vvar _vvlab _survey _backcheck) ///
 				(type variable label survey backcheck)
-
+			
 			cap ren (_surveylab _backchecklab) ///
-					(surveylabel backchecklabel)			
+					(surveylabel backchecklabel)
+			
+			cap ren _okrange okrange
 			
 			* create days difference variable
 			gen _surveyday = `surveydate' 
@@ -683,21 +698,22 @@ program ipabcstats, rclass
 
 			cap gen surveylabel = ""
 			cap gen backchecklabel = ""
+			cap gen okrange = ""
 
-			foreach name of varlist survey surveylabel backcheck backchecklabel `id' `enumerator' `enumteam' `backchecker' `bcteam' `keepsurvey' {
+			foreach name of varlist survey surveylabel backcheck backchecklabel okrange `id' `enumerator' `enumteam' `backchecker' `bcteam' `keepsurvey' {
 				lab var `name' "`name'"
 			}
 			
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel ///
-			 backcheck backchecklabel result `keepsurvey' `bc_keepbc' `surveydate' `bcdate' days ///
+			 backcheck backchecklabel result okrange `keepsurvey' `bc_keepbc' `surveydate' `bcdate' days ///
 			 _surveyday _vdiff
 			
 			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel ///
-			backcheck backchecklabel result `keepsurvey' `bc_keepbc' `surveydate' `bcdate' days ///
+			backcheck backchecklabel result okrange `keepsurvey' `bc_keepbc' `surveydate' `bcdate' days ///
 			_surveyday _vdiff
 
 			save `_cdata'
-
+			
 			* Create summary sheet
 			encode type, gen(vartype)
 
@@ -839,7 +855,7 @@ program ipabcstats, rclass
 				export excel `id' `bcexportvars' using "`filename'", sheet("backcheck only", modify) first(var) cell(B3)  `nolabel'
 				mata: format_bconlyids("`filename'", "backcheck only")
 			}
-
+			
 			* create showid
 			use `_cdata', clear
 
@@ -880,15 +896,16 @@ program ipabcstats, rclass
 			lab var `surveydate' "`surveydate'"
 			loc lab = substr("`bcdate'", 4, .)
 			lab var `bcdate' "`lab'"
+			
+			loc showokrange = cond("`okrange'" ~= "", "okrange", "")
+			loc exp_vars "`id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey'"
 
-		
-			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
-			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey'  ///
-				using "`filename'", sheet("comparison") first(varl) cell(B4) `nolabel'
+			order `exp_vars' `bc_keepbc'
+			export excel `exp_vars' using "`filename'", sheet("comparison") first(varl) cell(B4) `nolabel'
 			
 			if "`bc_keepbc'" ~= "" {
 				
-				unab exp_vars: `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' 
+				unab exp_vars: `exp_vars' 
 				loc range_cnt = wordcount("`exp_vars'")
 
 				mata: st_local("alphavar", invtokens(numtobase26(`=`range_cnt'+2')))
@@ -903,7 +920,7 @@ program ipabcstats, rclass
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			gen _a = "", before(`id')
 			unab id: `id'
-
+			
 			if "`nolabel'" == "" { 
 				ds `enumerator' `enumteam' `backchecker' `bcteam' `bcteam' `keepsurvey' `bc_keepbc', has(vallab) 
 				foreach var in `r(varlist)'	{
@@ -921,14 +938,15 @@ program ipabcstats, rclass
 			loc bcer `:word count `backchecker' `bcteam''
 			loc keeps `: word count `keepsurvey''
 			loc keepb `:word count `keepbc''
+			loc okr = cond("`okrange'" ~= "", 1, 0)
 			loc t1 = cond("`t1vars'" ~= "", 1, 0)
 			loc t2 = cond("`t2vars'" ~= "", 1, 0)
 			loc t3 = cond("`t3vars'" ~= "", 1, 0)
-
+			
+			order _a `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
+			keep _a `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			mata: format_comparison("`filename'", "comparison")
 			mata: adjust_column_width("`filename'", "comparison")
-
-
 			
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator)  `nolabel'
@@ -1375,10 +1393,10 @@ void adjust_column_width(string scalar filename, string scalar sheetname)
 		collen = colmax(strlen(st_sdata(., i)))
 		
 		if (namelen > collen) {
-			column_width = namelen + 1
+			column_width = namelen + 3
 		}
 		else {
-			column_width = collen + 1
+			column_width = collen + 3
 		}
 		
 		if (column_width > 101) {
@@ -1480,15 +1498,16 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	b.load_book(filename)
 	b.set_sheet(sheetname)
 	b.set_mode("open")
-
-	nrows = st_nobs() + 4 
+	
+	nrows = st_nobs() + 4
+	ncols = st_nvar()
 	idpos = 1 + strtoreal(st_local("idcount"))
 	enumpos = idpos + strtoreal(st_local("enumcount"))
 	bcerpos = enumpos + strtoreal(st_local("bcer"))
 	varpos = bcerpos + 3
 	spos = varpos + 2
 	bcpos = spos + 2
-	respos = bcpos + 1
+	respos = bcpos + 1 + strtoreal(st_local("okr"))
 	datepos = respos + 3
 	keepspos = datepos + strtoreal(st_local("keeps"))
 	keepbcpos = keepspos + strtoreal(st_local("keepb"))
