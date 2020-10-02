@@ -38,7 +38,7 @@ program ipabcstats, rclass
 		* save data in memory
 		tempfile _originaldata
 		qui save `_originaldata', emptyok
-
+		
 		* check syntax
 		* check that at least one variable is specified in t1, t2 or t3
 		if "`t1vars'`t2vars'`t3vars'" == "" {
@@ -809,7 +809,6 @@ program ipabcstats, rclass
 			reshape long _vdiff valcount, i(`unit') j(vartype)
 			collapse (sum) valcount _vdiff, by(vartype)
 
-
 			set obs 4
 			replace vartype = 4 in 4
 			lab define vartype 4 "All", add
@@ -859,9 +858,11 @@ program ipabcstats, rclass
 					ren `var' `stub'
 					loc bcexportvars `bcexportvars' `stub'
 				}
-
-				if "`nolabel'" == "" { 
-					ds `id' `backchecker' `bcteam' `bcexportvars', has(vallab) 
+				
+				* apply nolabel option
+				ds `id' `backchecker' `bcteam' `bcexportvars', has(vallab) 
+				if "`nolabel'" == "nolabel" _strip_labels `r(varlist)'
+				else { 
 					foreach var in `r(varlist)'	{
 						decode `var', gen(`var'_new)
 						order `var'_new, after(`var')
@@ -898,9 +899,26 @@ program ipabcstats, rclass
 		 		if `showidcount' > 0 {
 		 			gsort -_iderror_rate
 		 			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate
+					
+					* apply nolabel option
+					ds `id' `enumerator' `enumteam' `backchecker' `bcteam', has (vallabel)
+					if "`nolabel'" == "nolabel" _strip_labels `r(varlist)'
+					else {
+						foreach var in `r(varlist)'	{
+							decode `var', gen(`var'_new)
+							order `var'_new, after(`var')
+							drop `var'
+							ren `var'_new `var'
+							lab var `var' "`var'"	 
+						}
+					}
+				
 		 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate ///
 		 			using "`filename'", sheet("IDs") firstrow(varl) cell(B3)
 		 			mata: format_showids("`filename'", "IDs")
+					gen _a = "", before(`id')
+					mata: adjust_column_width("`filename'", "IDs")
+					xx
 		 		}
 		
 			if `showid' > `idmin' & `showid' < `idmax' {
@@ -940,8 +958,10 @@ program ipabcstats, rclass
 			gen _a = "", before(`id')
 			unab id: `id'
 			
-			if "`nolabel'" == "" { 
-				ds `enumerator' `enumteam' `backchecker' `bcteam' `bcteam' `keepsurvey' `bc_keepbc', has(vallab) 
+			* apply nolabel option
+			ds `enumerator' `enumteam' `backchecker' `bcteam' `bcteam' `keepsurvey' `bc_keepbc', has(vallab) 
+			if "`nolabel'" == "nolabel" _strip_labels `r(varlist)' 
+			else {
 				foreach var in `r(varlist)'	{
 					decode `var', gen(`var'_new)
 					order `var'_new, after(`var')
@@ -950,7 +970,6 @@ program ipabcstats, rclass
 					lab var `var' "`var'"	 
 				}
 			}
-
 
 			loc idcount `:word count `id''
 			loc enumcount `:word count `enumerator' `enumteam''
@@ -1598,7 +1617,9 @@ void format_showids (string scalar filename, string scalar sheetname) {
 	b.load_book(filename)
 	b.set_sheet(sheetname)
 	b.set_mode("open")
-
+	
+	b.set_sheet_gridlines(sheetname, "off")
+	b.set_border((3, nrows), (2, nvars), "hair")
 	b.set_right_border((3, nrows), 1, "medium")
 	b.set_right_border((3, nrows), nvars - 3, "medium")
 	b.set_right_border((3, nrows), nvars, "medium")
@@ -1618,7 +1639,7 @@ void format_showids (string scalar filename, string scalar sheetname) {
 
 		b.set_column_width(i + 1, i + 1, collen)
 	}
-	b.set_horizontal_align((3, nrows), (2, nvars), "center")
+	b.set_horizontal_align((3, nrows), (5, nvars), "center")
 	b.set_row_height(1, 1, 10)
 
 	b.close_book()
