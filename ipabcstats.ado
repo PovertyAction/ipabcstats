@@ -404,6 +404,25 @@ program ipabcstats, rclass
 					}
 				}
 			}
+			
+			* check that the same vars listed in keepbc are not listed in id, bcteam and backchecker 
+			if "`keepbc'" ~= "" {
+				unab keepbc: `keepsurvey'
+				foreach var of varlist `keepbc' {
+					if `:list var in id' {
+						dis as err "variable `var' not allowed in both id() and keepbc() options"
+						ex 198
+					}
+					if `:list var in backchecker' {
+						dis as err "variable `var' not allowed in both backchecker() and keepbc() options"
+						ex 198
+					}
+					if `:list var in bcteam' & "`bcteam'" ~= "" {
+						dis as err "variable `var' not allowed in both bcteam() and keepbc() options"
+						ex 198
+					}
+				}
+			}
 
 			* add _bc prefix to backcheck dataset
 			foreach var of varlist `t1vars' `t2vars' `t3vars' `ttest' `signrank' `prtest' `reliability' `keepbc' `bcdate' {
@@ -781,9 +800,9 @@ program ipabcstats, rclass
 			return matrix rates_`unit' = `rates_`unit''
 
 			graph drop _all
-			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") ///
+			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") legend(col(4)) ///
 			scheme(s1color) name(summary) ytitle("%") lwidth(thin thin thin thick) lpattern(dash dash dash solid)
-			graph export "`c(tmpdir)'errorrates.png", width(460) replace name(summary)
+			graph export "`c(tmpdir)'/errorrates.png", width(550) replace name(summary)
 			graph close
 			drop error_rate*
 
@@ -1473,7 +1492,7 @@ void add_summary_formatting(string scalar filename, string scalar sheetname, str
 	if (strtoreal(st_local("count")) > 1) {
 		graphdir = st_local("directory") + "errorrates.png"
 		b.put_picture(18, 3, graphdir)
-		border = 35
+		border = 38
 	}
 
 	b.set_bottom_border(border, (2, 9), "thin")
