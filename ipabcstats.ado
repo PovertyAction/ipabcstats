@@ -918,7 +918,6 @@ program ipabcstats, rclass
 		 			mata: format_showids("`filename'", "IDs")
 					gen _a = "", before(`id')
 					mata: adjust_column_width("`filename'", "IDs")
-					xx
 		 		}
 		
 			if `showid' > `idmin' & `showid' < `idmax' {
@@ -980,12 +979,12 @@ program ipabcstats, rclass
 			loc t1 = cond("`t1vars'" ~= "", 1, 0)
 			loc t2 = cond("`t2vars'" ~= "", 1, 0)
 			loc t3 = cond("`t3vars'" ~= "", 1, 0)
-			
+						
 			order _a `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			keep _a `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			mata: format_comparison("`filename'", "comparison")
 			mata: adjust_column_width("`filename'", "comparison")
-			
+			xxx
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator)  `nolabel'
 			gsort -error_rate -error_rate1 -error_rate2 -error_rate3
@@ -1554,10 +1553,9 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	positions = (idpos\enumpos\bcerpos\varpos\spos\bcpos\respos\datepos\keepspos\keepbcpos)
 	
 	if (nrows < 3000) {
-
+		
 		b.set_right_border((4, nrows), 1, "medium")
 
-		
 		for (i = 1; i<=10; i++) {
 			b.set_right_border((4, nrows), positions[i], "medium")
 		}
@@ -1590,6 +1588,11 @@ void format_comparison(string scalar filename, string scalar sheetname)
 		}
 		b.set_border(3, (respos + 1, lastcol), "medium")
 	}
+	else {
+		
+		b.set_bottom_border(4, (2, ncols), "medium")
+		
+	}
 
 	b.set_horizontal_align((2, 3), (respos + 1, keepbcpos), "center")
 	b.set_font_bold((2,4), (2, keepbcpos), "on")
@@ -1618,8 +1621,6 @@ void format_showids (string scalar filename, string scalar sheetname) {
 	b.set_sheet(sheetname)
 	b.set_mode("open")
 	
-	b.set_sheet_gridlines(sheetname, "off")
-	b.set_border((3, nrows), (2, nvars), "hair")
 	b.set_right_border((3, nrows), 1, "medium")
 	b.set_right_border((3, nrows), nvars - 3, "medium")
 	b.set_right_border((3, nrows), nvars, "medium")
