@@ -860,17 +860,7 @@ program ipabcstats, rclass
 				}
 				
 				* apply nolabel option
-				ds `id' `backchecker' `bcteam' `bcexportvars', has(vallab) 
-				if "`nolabel'" == "nolabel" _strip_labels `r(varlist)'
-				else { 
-					foreach var in `r(varlist)'	{
-						decode `var', gen(`var'_new)
-						order `var'_new, after(`var')
-						drop `var'
-						ren `var'_new `var'
-						lab var `var' "`var'"	 
-					}
-				}
+				apply_nolab `id' `backchecker' `bcteam' `bcexportvars', `nolabel' keepvarlab 
 				sort `id' `backchecker' `bcteam' `bcexportvars'
 				export excel `id' `bcexportvars' using "`filename'", sheet("backcheck only", modify) first(var) cell(B3)  `nolabel'
 				mata: format_bconlyids("`filename'", "backcheck only")
@@ -901,17 +891,7 @@ program ipabcstats, rclass
 		 			keep `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate
 					
 					* apply nolabel option
-					ds `id' `enumerator' `enumteam' `backchecker' `bcteam', has (vallabel)
-					if "`nolabel'" == "nolabel" _strip_labels `r(varlist)'
-					else {
-						foreach var in `r(varlist)'	{
-							decode `var', gen(`var'_new)
-							order `var'_new, after(`var')
-							drop `var'
-							ren `var'_new `var'
-							lab var `var' "`var'"	 
-						}
-					}
+					apply_nolab `id' `enumerator' `enumteam' `backchecker' `bcteam', `nolabel' keepvarlab
 				
 		 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate ///
 		 			using "`filename'", sheet("IDs") firstrow(varl) cell(B3)
@@ -958,18 +938,8 @@ program ipabcstats, rclass
 			unab id: `id'
 			
 			* apply nolabel option
-			ds `enumerator' `enumteam' `backchecker' `bcteam' `bcteam' `keepsurvey' `bc_keepbc', has(vallab) 
-			if "`nolabel'" == "nolabel" _strip_labels `r(varlist)' 
-			else {
-				foreach var in `r(varlist)'	{
-					decode `var', gen(`var'_new)
-					order `var'_new, after(`var')
-					drop `var'
-					ren `var'_new `var'
-					lab var `var' "`var'"	 
-				}
-			}
-
+			apply_nolab `enumerator' `enumteam' `backchecker' `bcteam' `bcteam' `keepsurvey' `bc_keepbc', `nolabel' keepvarlab
+			
 			loc idcount `:word count `id''
 			loc enumcount `:word count `enumerator' `enumteam''
 			loc bcer `:word count `backchecker' `bcteam''
@@ -984,14 +954,13 @@ program ipabcstats, rclass
 			keep _a `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			mata: format_comparison("`filename'", "comparison")
 			mata: adjust_column_width("`filename'", "comparison")
-			xxx
+			
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator)  `nolabel'
 			gsort -error_rate -error_rate1 -error_rate2 -error_rate3
-			export excel using "`filename'", sheet("enumerator stats", replace) first(varl) cell(B3)
-			gen _a = "", before(`enumerator')
-			mata: format_enumstats("`filename'", "enumerator stats", "`enumerator'", 0)
-
+			
+			export excel using "`filename'", sheet("enumerator stats", replace) first(varl) cell(B3) `nolabel'
+			
 			forval i = 3(-1)1 {
 				cap confirm var error_rate`i'
 				if !_rc {
@@ -1007,13 +976,16 @@ program ipabcstats, rclass
 			mkmat `enumerator' backcheck_percent, matrix(enum_bc)
 			matrix coln enum_bc = `enumerator' "bc_pct"
 			return matrix enum_bc = enum_bc
+			
+			* apply nolabel 
+			gen _a = "", before(`enumerator')
+			apply_nolab `enumerator', `nolabel' keepvarlab
+			mata: format_enumstats("`filename'", "enumerator stats", "`enumerator'", 0)
 		
 			if "`enumteam'" ~= "" {
 				create_stats using "`_diffs'", enum(`enumteam') enumdata("`_enumteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enum team) `nolabel'
 				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
-				export excel using "`filename'", sheet("enumerator team stats", replace) first(varl) cell(B3)
-				gen _a = "", before(`enumteam')
-				mata: format_enumstats("`filename'", "enumerator team stats", "`enumteam'", 0)
+				export excel using "`filename'", sheet("enumerator team stats", replace) first(varl) cell(B3) `nolabel'
 
 				forval i = 3(-1)1 {
 					cap confirm var error_rate`i'
@@ -1029,15 +1001,17 @@ program ipabcstats, rclass
 				replace backcheck_percent = round(backcheck_percent * 100, 0.01)
 				mkmat `enumteam' backcheck_percent, matrix(enumteam_bc)
 				return matrix enumteam_bc = enumteam_bc
+				
+				gen _a = "", before(`enumteam')
+				apply_nolab `enumteam', `nolabel' keepvarlab
+				mata: format_enumstats("`filename'", "enumerator team stats", "`enumteam'", 0)
 			}
 			
 			create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(backchecker) `nolabel'
 			merge 1:1 `backchecker' using `_bcavgdata', nogen
 			order days, after(backchecks)
 			gsort -error_rate -error_rate1 -error_rate2 -error_rate3
-			export excel using "`filename'", sheet("backchecker stats", replace) first(varl) cell(B3)
-			gen _a = ""
-			mata: format_enumstats("`filename'", "backchecker stats", "`backchecker'", 1)
+			export excel using "`filename'", sheet("backchecker stats", replace) first(varl) cell(B3) `nolabel'
 
 			forval i = 3(-1)1 {
 				cap confirm var error_rate`i'
@@ -1053,6 +1027,10 @@ program ipabcstats, rclass
 			ren days average_days
 			mkmat `backchecker' average_days, matrix(backchecker_avd)
 			return matrix backchecker_avd = backchecker_avd
+			
+			gen _a = ""
+			apply_nolab `backchecker', `nolabel' keepvarlab
+			mata: format_enumstats("`filename'", "backchecker stats", "`backchecker'", 1)
 
 			if "`bcteam'" ~= "" {
 				create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(bc team) `nolabel'
@@ -1060,8 +1038,6 @@ program ipabcstats, rclass
 				order days, after(backchecks)
 				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
 				export excel using "`filename'", sheet("backchecker team stats", replace) first(varl) cell(B3)
-				gen _a = ""
-				mata: format_enumstats("`filename'", "backchecker team stats", "`bcteam'", 1)
 
 				forval i = 3(-1)1 {
 					cap confirm var error_rate`i'
@@ -1077,6 +1053,10 @@ program ipabcstats, rclass
 				ren days average_days
 				mkmat `bcteam' average_days, matrix(bcteam_avd)
 				return matrix bcteam_avd = bcteam_avd
+				
+				gen _a = ""
+				apply_nolab `bcteam', `nolabel' keepvarlab
+				mata: format_enumstats("`filename'", "backchecker team stats", "`bcteam'", 1)
 			}
 
 
@@ -1225,6 +1205,24 @@ program ipabcstats, rclass
 
 	use `_originaldata', clear
 
+end
+
+* program to apply nolabel option
+program define apply_nolab 
+	
+	syntax varlist[, NOLabel keepvarlab] 
+	
+	ds `varlist', has(vallab)
+	if "`nolabel'" == "nolabel" & !missing("`r(varlist)'") _strip_labels `r(varlist)'
+	else { 
+		foreach var in `r(varlist)'	{
+			decode `var', gen(_newvar)
+			order _newvar, after(`var')
+			drop `var'
+			ren _newvar `var'
+			if "`keepvarlab'" ~= "" lab var `var' "`var'"	 
+		}
+	}
 end
 
 * program to remove symbols, trim and change cases of string values
