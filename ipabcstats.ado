@@ -10,6 +10,7 @@ Matt White (Innovations for Poverty Action)
 Wishlist:
 	-- dialog
 	-- fuzzy match strings (preferable write new command, alternative use matchit, reclink or strgroup)
+	-- allow string enum, enumteam, bc, and bcteam variables
 
 */
 
@@ -173,6 +174,25 @@ program ipabcstats, rclass
 				}
 			}
 
+			* check that enum and enumteam are numeric
+			cap confirm numeric variable `enumerator'
+
+			if _rc != 0 {
+				nois di as error `"Enumerator variable `enumerator' in enumerator() must be a numeric variable."'
+				ex 108
+			}
+
+
+			if "`enumteam'" ~= "" {
+				cap confirm numeric variable `enumteam'
+
+				if _rc != 0 {
+					nois di as error `"Enumerator team variable `enumteam' in enumteam() must be a numeric variable."'
+					nois di as error `"enumteam option will not be included in output."'
+					loc enumteam ""
+				}
+			}
+
 			* check that no variable is prefixed with _bc
 			cap ds _bc*
 			if !_rc {
@@ -223,11 +243,9 @@ program ipabcstats, rclass
 				while length(subinstr("`okrange'", " ", "", .)) > 0 {
 					loc okrcomb = substr("`okrange'", 1, strpos("`okrange'", "]"))
 					gettoken okrvar okrcomb: okrcomb, parse([)
-					dis "okrvar: `okrvar'"
-					dis "okrcomb: `okrcomb'"
 					
 					* Check that combo has "[", "," and "]" inspecified order
-					loc okcomb = subinstr("`okcomb'", " ", "", .)
+					loc okrcomb = subinstr("`okrcomb'", " ", "", .)
 					cap assert (strpos("`okrcomb'", "[") > 0) & (strpos("`okrcomb'", ",") > strpos("`okrcomb'", "[")) & (strpos("`okrcomb'", "]") > strpos("`okrcomb'", ","))
 					if _rc {
 						di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
@@ -390,6 +408,25 @@ program ipabcstats, rclass
 				exit 459
 			}
 
+			* check that bc and bcteam are numeric
+			cap confirm numeric variable `backchecker'
+
+			if _rc != 0 {
+				nois di as error `"Backchecker variable `backchecker' in backchecker() must be a numeric variable."'
+				ex 108
+			}
+
+
+			if "`bcteam'" ~= "" {
+				cap confirm numeric variable `bcteam'
+
+				if _rc != 0 {
+					nois di as error `"Backchecker team variable `bcteam' in bcteam() must be a numeric variable."'
+					nois di as error `"enumteam option will not be included in output."'
+					loc bcteam ""
+				}
+			}
+			
 			* change str
 			change_str `tvars', `nosymbol' `lower' `upper' `trim'
 
