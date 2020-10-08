@@ -240,6 +240,8 @@ program ipabcstats, rclass
 				
 				* count the number combinations
 				loc comb_cnt = length("`okrange'") -  length(subinstr("`okrange'", "]", "", .))
+				loc showokrange = cond("`okrange'" ~= "", "okrange", "")
+				loc okrange = subinstr("`okrange'", " ", "", .) 
 				while length(subinstr("`okrange'", " ", "", .)) > 0 {
 					loc okrcomb = substr("`okrange'", 1, strpos("`okrange'", "]"))
 					gettoken okrvar okrcomb: okrcomb, parse([)
@@ -426,7 +428,7 @@ program ipabcstats, rclass
 					loc bcteam ""
 				}
 			}
-			
+
 			* change str
 			change_str `tvars', `nosymbol' `lower' `upper' `trim'
 
@@ -966,11 +968,10 @@ program ipabcstats, rclass
 			loc lab = substr("`bcdate'", 4, .)
 			lab var `bcdate' "`lab'"
 			
-			loc showokrange = cond("`okrange'" ~= "", "okrange", "")
 			loc exp_vars "`id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey'"
 
 			order `exp_vars' `bc_keepbc'
-			*pause
+			pause
 			export excel `exp_vars' using "`filename'", sheet("comparison") first(varl) cell(B4) `nolabel'
 			
 			if "`bc_keepbc'" ~= "" {
@@ -995,7 +996,7 @@ program ipabcstats, rclass
 			apply_nolab `enumerator' `enumteam' `backchecker' `bcteam' `bcteam' `keepsurvey' `bc_keepbc', `nolabel' keepvarlab
 			
 
-			loc okr = cond("`okrange'" ~= "", 1, 0)
+			loc okr = cond("`showokrange'" == "okrange", 1, 0)
 			loc t1 = cond("`t1vars'" ~= "", 1, 0)
 			loc t2 = cond("`t2vars'" ~= "", 1, 0)
 			loc t3 = cond("`t3vars'" ~= "", 1, 0)
@@ -1036,7 +1037,6 @@ program ipabcstats, rclass
 				create_stats using "`_diffs'", enum(`enumteam') enumdata("`_enumteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enum team) `nolabel'
 				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
 				export excel using "`filename'", sheet("enumerator team stats", replace) first(varl) cell(B3) `nolabel'
-				pause
 				
 				forval i = 3(-1)1 {
 					cap confirm var error_rate`i'
@@ -1593,24 +1593,25 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	varpos = bcerpos + 3
 	spos = varpos + 2
 	bcpos = spos + 2
-	respos = bcpos + 1 + strtoreal(st_local("okr"))
-	datepos = respos + 3
+	respos = bcpos + 1
+	okrpos = respos + strtoreal(st_local("okr")) 
+	datepos = okrpos + 3
 	keepspos = datepos + strtoreal(st_local("keeps"))
 	keepbcpos = keepspos + strtoreal(st_local("keepb"))
 
 
-	positions = (idpos\enumpos\bcerpos\varpos\spos\bcpos\respos\datepos\keepspos\keepbcpos)
+	positions = (idpos\enumpos\bcerpos\varpos\spos\bcpos\respos\okrpos\datepos\keepspos\keepbcpos)
 	
 	if (nrows < 3000) {
 		
 		b.set_right_border((4, nrows), 1, "medium")
 
-		for (i = 1; i<=10; i++) {
+		for (i = 1; i<=11; i++) {
 			b.set_right_border((4, nrows), positions[i], "medium")
 		}
 	}
 	
-	b.set_sheet_merge(sheetname, (2, 2), (respos + 1, respos + 3))
+	b.set_sheet_merge(sheetname, (2, 2), (okrpos + 1, okrpos + 3))
 
 	if (strtoreal(st_local("keeps")) > 0) {
 
@@ -1635,7 +1636,7 @@ void format_comparison(string scalar filename, string scalar sheetname)
 			lastcol = keepbcpos
 
 		}
-		b.set_border(3, (respos + 1, lastcol), "medium")
+		b.set_border(3, (okrpos + 1, lastcol), "medium")
 	}
 	else {
 		
@@ -1643,13 +1644,13 @@ void format_comparison(string scalar filename, string scalar sheetname)
 		
 	}
 
-	b.set_horizontal_align((2, 3), (respos + 1, keepbcpos), "center")
+	b.set_horizontal_align((2, 3), (okrpos + 1, keepbcpos), "center")
 	b.set_font_bold((2,4), (2, keepbcpos), "on")
 
-	b.put_string(3, respos + 1, "Survey")
-	b.put_string(3, respos + 2, "Backcheck")
-	b.put_string(3, respos + 3, "Difference")
-	b.put_string(2, respos + 1, "Dates")
+	b.put_string(3, okrpos + 1, "Survey")
+	b.put_string(3, okrpos + 2, "Backcheck")
+	b.put_string(3, okrpos + 3, "Difference")
+	b.put_string(2, okrpos + 1, "Dates")
 
 	b.set_row_height(1, 1, 10)
 
