@@ -225,7 +225,7 @@ program ipabcstats, rclass
 					gettoken okrvar okrcomb: okrcomb, parse([)
 					
 					* Check that combo has "[", "," and "]" inspecified order
-					loc okcomb = subinstr("`okcomb'", " ", "", .)
+					loc okrcomb = subinstr("`okcomb'", " ", "", .)
 					cap assert (strpos("`okrcomb'", "[") > 0) & (strpos("`okrcomb'", ",") > strpos("`okrcomb'", "[")) & (strpos("`okrcomb'", "]") > strpos("`okrcomb'", ","))
 					if _rc {
 						di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
@@ -407,7 +407,7 @@ program ipabcstats, rclass
 			
 			* check that the same vars listed in keepbc are not listed in id, bcteam and backchecker 
 			if "`keepbc'" ~= "" {
-				unab keepbc: `keepsurvey'
+				unab keepbc: `keepbc'
 				foreach var of varlist `keepbc' {
 					if `:list var in id' {
 						dis as err "variable `var' not allowed in both id() and keepbc() options"
