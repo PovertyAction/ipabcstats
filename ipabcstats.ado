@@ -17,7 +17,7 @@ program ipabcstats, rclass
     version 	14.2
     cap version 15.1 /* written in stata 15.1 but will run in stata 14.2 */ 
 	set graphics on
-   
+   pause on
     #d;
     syntax, 																			
     	Surveydata(str) Bcdata(str)
@@ -223,6 +223,8 @@ program ipabcstats, rclass
 				while length(subinstr("`okrange'", " ", "", .)) > 0 {
 					loc okrcomb = substr("`okrange'", 1, strpos("`okrange'", "]"))
 					gettoken okrvar okrcomb: okrcomb, parse([)
+					dis "okrvar: `okrvar'"
+					dis "okrcomb: `okrcomb'"
 					
 					* Check that combo has "[", "," and "]" inspecified order
 					loc okcomb = subinstr("`okcomb'", " ", "", .)
@@ -407,7 +409,7 @@ program ipabcstats, rclass
 			
 			* check that the same vars listed in keepbc are not listed in id, bcteam and backchecker 
 			if "`keepbc'" ~= "" {
-				unab keepbc: `keepsurvey'
+				unab keepbc: `keepbc'
 				foreach var of varlist `keepbc' {
 					if `:list var in id' {
 						dis as err "variable `var' not allowed in both id() and keepbc() options"
@@ -752,6 +754,17 @@ program ipabcstats, rclass
 			loc maxdate = `r(max)'
 			loc count = `r(max)' - `r(min)'
 
+			forval i = 1/3 {
+				gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
+				lab var error_rate`i' "Type `i'"
+			}
+
+
+			tempname rates_time
+			mkmat _surveyday _vdiff* valcount*, matrix(`rates_time')
+			return matrix rates_time = `rates_time'
+
+
 			if `count' <= 30 {
 				gen days = _n
 				loc unit = "days"
@@ -782,7 +795,6 @@ program ipabcstats, rclass
 	
 				collapse (sum) valcount* _vdiff*, by(`unit')
 			}
-
 
 			forval i = 1/3 {
 				gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
@@ -880,7 +892,11 @@ program ipabcstats, rclass
 	 		sum _idcount
 	 		loc idmin = `r(min)'
 	 		loc idmax = `r(max)'
-
+			loc idcount `:word count `id''
+			loc enumcount `:word count `enumerator' `enumteam''
+			loc bcer `:word count `backchecker' `bcteam''
+			loc keeps `: word count `keepsurvey''
+			loc keepb `:word count `keepbc''
 
 		 		if "`percent'" == "1" keep if _iderror_rate > `showid' & count == 1
 		 		else keep if _iddifferences > `showid' & count == 1
@@ -917,6 +933,7 @@ program ipabcstats, rclass
 			loc exp_vars "`id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey'"
 
 			order `exp_vars' `bc_keepbc'
+			*pause
 			export excel `exp_vars' using "`filename'", sheet("comparison") first(varl) cell(B4) `nolabel'
 			
 			if "`bc_keepbc'" ~= "" {
@@ -940,11 +957,7 @@ program ipabcstats, rclass
 			* apply nolabel option
 			apply_nolab `enumerator' `enumteam' `backchecker' `bcteam' `bcteam' `keepsurvey' `bc_keepbc', `nolabel' keepvarlab
 			
-			loc idcount `:word count `id''
-			loc enumcount `:word count `enumerator' `enumteam''
-			loc bcer `:word count `backchecker' `bcteam''
-			loc keeps `: word count `keepsurvey''
-			loc keepb `:word count `keepbc''
+
 			loc okr = cond("`okrange'" ~= "", 1, 0)
 			loc t1 = cond("`t1vars'" ~= "", 1, 0)
 			loc t2 = cond("`t2vars'" ~= "", 1, 0)
@@ -986,7 +999,8 @@ program ipabcstats, rclass
 				create_stats using "`_diffs'", enum(`enumteam') enumdata("`_enumteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enum team) `nolabel'
 				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
 				export excel using "`filename'", sheet("enumerator team stats", replace) first(varl) cell(B3) `nolabel'
-
+				pause
+				
 				forval i = 3(-1)1 {
 					cap confirm var error_rate`i'
 					if !_rc {
@@ -1614,7 +1628,7 @@ void format_showids (string scalar filename, string scalar sheetname) {
 
 	b = xl()
 	nrows = st_nobs() + 3
-	nvars = st_nvar() + 1
+	nvars = strtoreal(st_local("idcount")) + strtoreal(st_local("enumcount")) + strtoreal(st_local("bcer")) + 4
 	b.load_book(filename)
 	b.set_sheet(sheetname)
 	b.set_mode("open")
