@@ -853,7 +853,7 @@ program ipabcstats, rclass
 			graph drop _all
 			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") legend(col(4)) ///
 			scheme(s1color) name(summary) ytitle("%") lwidth(thin thin thin thick) lpattern(dash dash dash solid)
-			graph export "`c(tmpdir)'/errorrates.png", width(550) replace name(summary)
+			graph export "`c(tmpdir)'/errorrates.png", width(460) replace name(summary)
 			graph close
 			drop error_rate*
 
@@ -971,7 +971,6 @@ program ipabcstats, rclass
 			loc exp_vars "`id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey'"
 
 			order `exp_vars' `bc_keepbc'
-			pause
 			export excel `exp_vars' using "`filename'", sheet("comparison") first(varl) cell(B4) `nolabel'
 			
 			if "`bc_keepbc'" ~= "" {
