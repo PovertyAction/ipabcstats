@@ -897,6 +897,13 @@ program ipabcstats, rclass
 			mata: add_summary_formatting("`filename'", "summary", "`c(current_date)'")
 			
 			return scalar bc_only = `bc_only'
+			
+			loc idcount `:word count `id''
+			loc enumcount `:word count `enumerator' `enumteam''
+			loc bcer `:word count `backchecker' `bcteam''
+			loc keeps `: word count `keepsurvey''
+			loc keepb `:word count `keepbc''
+
 			* export bc only IDs
 			if `bc_only' > 0 {
 				use `_bconly', clear
@@ -910,10 +917,12 @@ program ipabcstats, rclass
 					loc bcexportvars `bcexportvars' `stub'
 				}
 				
+				loc bcdatevar = subinstr("`bcdate'", "_bc", "", .)
 				* apply nolabel option
 				apply_nolab `id' `backchecker' `bcteam' `bcexportvars', `nolabel' keepvarlab 
 				sort `id' `backchecker' `bcteam' `bcexportvars'
-				export excel `id' `bcexportvars' using "`filename'", sheet("backcheck only", modify) first(var) cell(B3)  `nolabel'
+				order `id' `backchecker' `bcteam' `bcdatevar'
+				export excel `id' `backchecker' `bcteam' `bcdatevar' using "`filename'", sheet("backcheck only", modify) first(var) cell(B3)  `nolabel'
 				mata: format_bconlyids("`filename'", "backcheck only")
 			}
 			
@@ -1777,23 +1786,22 @@ void format_bconlyids (string scalar filename, string scalar sheetname) {
 
 	b = xl()
 	nrows = st_nobs() + 3
-	nvars = st_nvar()
+	nvars = strtoreal(st_local("bcer")) + strtoreal(st_local("idcount")) + 1
 	b.load_book(filename)
 	b.set_sheet(sheetname)
 	b.set_mode("open")
 
 	b.set_right_border((3, nrows), 1, "medium")
 	//b.set_right_border((3, nrows), nvars - 3, "medium")
-	b.set_right_border((3, nrows), nvars, "medium")
-	b.set_top_border((3, 4), (2, nvars), "medium")
-	b.set_bottom_border(nrows, (2, nvars), "medium")
+	b.set_right_border((3, nrows), nvars+1, "medium")
+	b.set_top_border((3, 4), (2, nvars+1), "medium")
+	b.set_bottom_border(nrows, (2, nvars+1), "medium")
 	
 	//b.set_column_width(nvars - 2, nvars, 10)
 	b.set_column_width(1, 1, 1)
 
 	for(i = 1; i <= nvars; i++) {
 		collen = colmax(strlen(st_sdata(., i)))
-//		namelen = strlen(st_varname(i))
 
 		if (st_varname(i) == st_local("surveydate") | st_varname(i) == st_local("bcdate") | st_varname(i) == "starttime" | st_varname(i) == "endtime" | st_varname(i) == "submissiondate") {
 			namelen = 16
@@ -1806,11 +1814,11 @@ void format_bconlyids (string scalar filename, string scalar sheetname) {
 
 
 
-		b.set_column_width(i, i, collen)
+		b.set_column_width(i+1, i+1, collen)
 	}
 
 
-	b.set_horizontal_align((3, nrows), (2, nvars), "center")
+	b.set_horizontal_align((3, nrows), (2, nvars+1), "center")
 	b.set_row_height(1, 1, 10)
 	b.set_column_width(1, 1, 1)
 
