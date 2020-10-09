@@ -10,6 +10,7 @@ Matt White (Innovations for Poverty Action)
 Wishlist:
 	-- dialog
 	-- fuzzy match strings (preferable write new command, alternative use matchit, reclink or strgroup)
+	-- allow string enum, enumteam, bc, and bcteam variables
 
 */
 
@@ -17,7 +18,7 @@ program ipabcstats, rclass
     version 	14.2
     cap version 15.1 /* written in stata 15.1 but will run in stata 14.2 */ 
 	set graphics on
-   
+   pause on
     #d;
     syntax, 																			
     	Surveydata(str) Bcdata(str)
@@ -173,6 +174,25 @@ program ipabcstats, rclass
 				}
 			}
 
+			* check that enum and enumteam are numeric
+			cap confirm numeric variable `enumerator'
+
+			if _rc != 0 {
+				nois di as error `"Enumerator variable `enumerator' in enumerator() must be a numeric variable."'
+				ex 108
+			}
+
+
+			if "`enumteam'" ~= "" {
+				cap confirm numeric variable `enumteam'
+
+				if _rc != 0 {
+					nois di as error `"Enumerator team variable `enumteam' in enumteam() must be a numeric variable."'
+					nois di as error `"enumteam option will not be included in output."'
+					loc enumteam ""
+				}
+			}
+
 			* check that no variable is prefixed with _bc
 			cap ds _bc*
 			if !_rc {
@@ -220,12 +240,14 @@ program ipabcstats, rclass
 				
 				* count the number combinations
 				loc comb_cnt = length("`okrange'") -  length(subinstr("`okrange'", "]", "", .))
+				loc showokrange = cond("`okrange'" ~= "", "okrange", "")
+				loc okrange = subinstr("`okrange'", " ", "", .) 
 				while length(subinstr("`okrange'", " ", "", .)) > 0 {
 					loc okrcomb = substr("`okrange'", 1, strpos("`okrange'", "]"))
 					gettoken okrvar okrcomb: okrcomb, parse([)
 					
 					* Check that combo has "[", "," and "]" inspecified order
-					loc okcomb = subinstr("`okcomb'", " ", "", .)
+					loc okrcomb = subinstr("`okrcomb'", " ", "", .)
 					cap assert (strpos("`okrcomb'", "[") > 0) & (strpos("`okrcomb'", ",") > strpos("`okrcomb'", "[")) & (strpos("`okrcomb'", "]") > strpos("`okrcomb'", ","))
 					if _rc {
 						di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
@@ -388,6 +410,25 @@ program ipabcstats, rclass
 				exit 459
 			}
 
+			* check that bc and bcteam are numeric
+			cap confirm numeric variable `backchecker'
+
+			if _rc != 0 {
+				nois di as error `"Backchecker variable `backchecker' in backchecker() must be a numeric variable."'
+				ex 108
+			}
+
+
+			if "`bcteam'" ~= "" {
+				cap confirm numeric variable `bcteam'
+
+				if _rc != 0 {
+					nois di as error `"Backchecker team variable `bcteam' in bcteam() must be a numeric variable."'
+					nois di as error `"enumteam option will not be included in output."'
+					loc bcteam ""
+				}
+			}
+
 			* change str
 			change_str `tvars', `nosymbol' `lower' `upper' `trim'
 
@@ -407,7 +448,7 @@ program ipabcstats, rclass
 			
 			* check that the same vars listed in keepbc are not listed in id, bcteam and backchecker 
 			if "`keepbc'" ~= "" {
-				unab keepbc: `keepsurvey'
+				unab keepbc: `keepbc'
 				foreach var of varlist `keepbc' {
 					if `:list var in id' {
 						dis as err "variable `var' not allowed in both id() and keepbc() options"
@@ -752,6 +793,17 @@ program ipabcstats, rclass
 			loc maxdate = `r(max)'
 			loc count = `r(max)' - `r(min)'
 
+			forval i = 1/3 {
+				gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
+				lab var error_rate`i' "Type `i'"
+			}
+
+
+			tempname rates_time
+			mkmat _surveyday _vdiff* valcount*, matrix(`rates_time')
+			return matrix rates_time = `rates_time'
+
+
 			if `count' <= 30 {
 				gen days = _n
 				loc unit = "days"
@@ -783,7 +835,6 @@ program ipabcstats, rclass
 				collapse (sum) valcount* _vdiff*, by(`unit')
 			}
 
-
 			forval i = 1/3 {
 				gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
 				lab var error_rate`i' "Type `i'"
@@ -802,7 +853,7 @@ program ipabcstats, rclass
 			graph drop _all
 			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") legend(col(4)) ///
 			scheme(s1color) name(summary) ytitle("%") lwidth(thin thin thin thick) lpattern(dash dash dash solid)
-			graph export "`c(tmpdir)'/errorrates.png", width(550) replace name(summary)
+			graph export "`c(tmpdir)'/errorrates.png", width(460) replace name(summary)
 			graph close
 			drop error_rate*
 
@@ -846,6 +897,13 @@ program ipabcstats, rclass
 			mata: add_summary_formatting("`filename'", "summary", "`c(current_date)'")
 			
 			return scalar bc_only = `bc_only'
+			
+			loc idcount `:word count `id''
+			loc enumcount `:word count `enumerator' `enumteam''
+			loc bcer `:word count `backchecker' `bcteam''
+			loc keeps `: word count `keepsurvey''
+			loc keepb `:word count `keepbc''
+
 			* export bc only IDs
 			if `bc_only' > 0 {
 				use `_bconly', clear
@@ -859,10 +917,12 @@ program ipabcstats, rclass
 					loc bcexportvars `bcexportvars' `stub'
 				}
 				
+				loc bcdatevar = subinstr("`bcdate'", "_bc", "", .)
 				* apply nolabel option
 				apply_nolab `id' `backchecker' `bcteam' `bcexportvars', `nolabel' keepvarlab 
 				sort `id' `backchecker' `bcteam' `bcexportvars'
-				export excel `id' `bcexportvars' using "`filename'", sheet("backcheck only", modify) first(var) cell(B3)  `nolabel'
+				order `id' `backchecker' `bcteam' `bcdatevar'
+				export excel `id' `backchecker' `bcteam' `bcdatevar' using "`filename'", sheet("backcheck only", modify) first(var) cell(B3)  `nolabel'
 				mata: format_bconlyids("`filename'", "backcheck only")
 			}
 			
@@ -880,7 +940,11 @@ program ipabcstats, rclass
 	 		sum _idcount
 	 		loc idmin = `r(min)'
 	 		loc idmax = `r(max)'
-
+			loc idcount `:word count `id''
+			loc enumcount `:word count `enumerator' `enumteam''
+			loc bcer `:word count `backchecker' `bcteam''
+			loc keeps `: word count `keepsurvey''
+			loc keepb `:word count `keepbc''
 
 		 		if "`percent'" == "1" keep if _iderror_rate > `showid' & count == 1
 		 		else keep if _iddifferences > `showid' & count == 1
@@ -913,7 +977,6 @@ program ipabcstats, rclass
 			loc lab = substr("`bcdate'", 4, .)
 			lab var `bcdate' "`lab'"
 			
-			loc showokrange = cond("`okrange'" ~= "", "okrange", "")
 			loc exp_vars "`id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `showokrange' `surveydate' `bcdate' days `keepsurvey'"
 
 			order `exp_vars' `bc_keepbc'
@@ -940,12 +1003,8 @@ program ipabcstats, rclass
 			* apply nolabel option
 			apply_nolab `enumerator' `enumteam' `backchecker' `bcteam' `bcteam' `keepsurvey' `bc_keepbc', `nolabel' keepvarlab
 			
-			loc idcount `:word count `id''
-			loc enumcount `:word count `enumerator' `enumteam''
-			loc bcer `:word count `backchecker' `bcteam''
-			loc keeps `: word count `keepsurvey''
-			loc keepb `:word count `keepbc''
-			loc okr = cond("`okrange'" ~= "", 1, 0)
+
+			loc okr = cond("`showokrange'" == "okrange", 1, 0)
 			loc t1 = cond("`t1vars'" ~= "", 1, 0)
 			loc t2 = cond("`t2vars'" ~= "", 1, 0)
 			loc t3 = cond("`t3vars'" ~= "", 1, 0)
@@ -986,7 +1045,7 @@ program ipabcstats, rclass
 				create_stats using "`_diffs'", enum(`enumteam') enumdata("`_enumteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enum team) `nolabel'
 				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
 				export excel using "`filename'", sheet("enumerator team stats", replace) first(varl) cell(B3) `nolabel'
-
+				
 				forval i = 3(-1)1 {
 					cap confirm var error_rate`i'
 					if !_rc {
@@ -1542,24 +1601,25 @@ void format_comparison(string scalar filename, string scalar sheetname)
 	varpos = bcerpos + 3
 	spos = varpos + 2
 	bcpos = spos + 2
-	respos = bcpos + 1 + strtoreal(st_local("okr"))
-	datepos = respos + 3
+	respos = bcpos + 1
+	okrpos = respos + strtoreal(st_local("okr")) 
+	datepos = okrpos + 3
 	keepspos = datepos + strtoreal(st_local("keeps"))
 	keepbcpos = keepspos + strtoreal(st_local("keepb"))
 
 
-	positions = (idpos\enumpos\bcerpos\varpos\spos\bcpos\respos\datepos\keepspos\keepbcpos)
+	positions = (idpos\enumpos\bcerpos\varpos\spos\bcpos\respos\okrpos\datepos\keepspos\keepbcpos)
 	
 	if (nrows < 3000) {
 		
 		b.set_right_border((4, nrows), 1, "medium")
 
-		for (i = 1; i<=10; i++) {
+		for (i = 1; i<=11; i++) {
 			b.set_right_border((4, nrows), positions[i], "medium")
 		}
 	}
 	
-	b.set_sheet_merge(sheetname, (2, 2), (respos + 1, respos + 3))
+	b.set_sheet_merge(sheetname, (2, 2), (okrpos + 1, okrpos + 3))
 
 	if (strtoreal(st_local("keeps")) > 0) {
 
@@ -1584,7 +1644,7 @@ void format_comparison(string scalar filename, string scalar sheetname)
 			lastcol = keepbcpos
 
 		}
-		b.set_border(3, (respos + 1, lastcol), "medium")
+		b.set_border(3, (okrpos + 1, lastcol), "medium")
 	}
 	else {
 		
@@ -1592,13 +1652,13 @@ void format_comparison(string scalar filename, string scalar sheetname)
 		
 	}
 
-	b.set_horizontal_align((2, 3), (respos + 1, keepbcpos), "center")
+	b.set_horizontal_align((2, 3), (okrpos + 1, keepbcpos), "center")
 	b.set_font_bold((2,4), (2, keepbcpos), "on")
 
-	b.put_string(3, respos + 1, "Survey")
-	b.put_string(3, respos + 2, "Backcheck")
-	b.put_string(3, respos + 3, "Difference")
-	b.put_string(2, respos + 1, "Dates")
+	b.put_string(3, okrpos + 1, "Survey")
+	b.put_string(3, okrpos + 2, "Backcheck")
+	b.put_string(3, okrpos + 3, "Difference")
+	b.put_string(2, okrpos + 1, "Dates")
 
 	b.set_row_height(1, 1, 10)
 
@@ -1614,7 +1674,7 @@ void format_showids (string scalar filename, string scalar sheetname) {
 
 	b = xl()
 	nrows = st_nobs() + 3
-	nvars = st_nvar() + 1
+	nvars = strtoreal(st_local("idcount")) + strtoreal(st_local("enumcount")) + strtoreal(st_local("bcer")) + 4
 	b.load_book(filename)
 	b.set_sheet(sheetname)
 	b.set_mode("open")
@@ -1726,23 +1786,22 @@ void format_bconlyids (string scalar filename, string scalar sheetname) {
 
 	b = xl()
 	nrows = st_nobs() + 3
-	nvars = st_nvar()
+	nvars = strtoreal(st_local("bcer")) + strtoreal(st_local("idcount")) + 1
 	b.load_book(filename)
 	b.set_sheet(sheetname)
 	b.set_mode("open")
 
 	b.set_right_border((3, nrows), 1, "medium")
 	//b.set_right_border((3, nrows), nvars - 3, "medium")
-	b.set_right_border((3, nrows), nvars, "medium")
-	b.set_top_border((3, 4), (2, nvars), "medium")
-	b.set_bottom_border(nrows, (2, nvars), "medium")
+	b.set_right_border((3, nrows), nvars+1, "medium")
+	b.set_top_border((3, 4), (2, nvars+1), "medium")
+	b.set_bottom_border(nrows, (2, nvars+1), "medium")
 	
 	//b.set_column_width(nvars - 2, nvars, 10)
 	b.set_column_width(1, 1, 1)
 
 	for(i = 1; i <= nvars; i++) {
 		collen = colmax(strlen(st_sdata(., i)))
-//		namelen = strlen(st_varname(i))
 
 		if (st_varname(i) == st_local("surveydate") | st_varname(i) == st_local("bcdate") | st_varname(i) == "starttime" | st_varname(i) == "endtime" | st_varname(i) == "submissiondate") {
 			namelen = 16
@@ -1755,11 +1814,11 @@ void format_bconlyids (string scalar filename, string scalar sheetname) {
 
 
 
-		b.set_column_width(i, i, collen)
+		b.set_column_width(i+1, i+1, collen)
 	}
 
 
-	b.set_horizontal_align((3, nrows), (2, nvars), "center")
+	b.set_horizontal_align((3, nrows), (2, nvars+1), "center")
 	b.set_row_height(1, 1, 10)
 	b.set_column_width(1, 1, 1)
 
