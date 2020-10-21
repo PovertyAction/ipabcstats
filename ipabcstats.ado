@@ -803,7 +803,7 @@ program ipabcstats, rclass
 			tempname rates_time
 			mkmat _surveyday _vdiff* valcount*, matrix(`rates_time')
 			return matrix rates_time = `rates_time'
-
+			drop error_rate1 error_rate2 error_rate3
 
 			if `count' <= 30 {
 				gen days = _n
