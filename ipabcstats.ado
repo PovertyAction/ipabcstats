@@ -38,7 +38,7 @@ program ipabcstats, rclass
 
 		* save data in memory
 		tempfile _originaldata
-		qui save `_originaldata', emptyok
+		qui save "`_originaldata'", emptyok
 		
 		* check syntax
 		* check that at least one variable is specified in t1, t2 or t3
@@ -144,7 +144,7 @@ program ipabcstats, rclass
 		}
 		
 		* temp datasets and vars
-		tempfile _sdata _bdata _mdata _diffs _cdata _enumdata _enumteamdata _bcerdata _bcerteamdata _checks _fmdata _bconly _bcavgdata _bcteamavgdata _varstats
+		tempfile _sdata _bdata _mdata _diffs _cdata _enumdata _enumteamdata _bcerdata _bcerteamdata _checks _bconly _bcavgdata _bcteamavgdata _varstats
 
 		qui {
 			* import only relevant variables in survey dataset
@@ -165,7 +165,7 @@ program ipabcstats, rclass
 
 
 			* set warning if ID is long
-			cap confirm string variable `id' 
+			cap confirm string var `id' 
 			if _rc != 0 {
 				summ `id'
 				if abs(floor(log10(`r(max)'))) + 1 > 20 {
@@ -179,7 +179,7 @@ program ipabcstats, rclass
 			}
 
 			* check that enum and enumteam are numeric
-			cap confirm numeric variable `enumerator'
+			cap confirm numeric var `enumerator'
 
 			if _rc != 0 {
 				nois di as error `"Enumerator variable `enumerator' in enumerator() must be a numeric variable."'
@@ -188,7 +188,7 @@ program ipabcstats, rclass
 
 
 			if "`enumteam'" ~= "" {
-				cap confirm numeric variable `enumteam'
+				cap confirm numeric var `enumteam'
 
 				if _rc != 0 {
 					nois di as error `"Enumerator team variable `enumteam' in enumteam() must be a numeric variable."'
@@ -385,22 +385,22 @@ program ipabcstats, rclass
 			* unab survey list
 			if "`keepsurvey'" 	~= "" unab keepsurvey   :	`keepsurvey'
 
-			save `_sdata'
+			save "`_sdata'"
 
 			* create and save data for enumerators
 			keep `enumerator'
 			bys `enumerator': gen surveys = _N
 			bys `enumerator': keep if _n == 1
 
-			save `_enumdata'
+			save "`_enumdata'"
 
 			* create enumerator team statistics
 			if "`enumteam'" ~= "" {
-				use `_sdata', clear
+				use "`_sdata'", clear
 				keep `enumteam'
 				bys `enumteam': gen surveys = _N 
 				bys `enumteam': keep if _n == 1
-				save `_enumteamdata'
+				save "`_enumteamdata'"
 			}
 			
 			
@@ -417,7 +417,7 @@ program ipabcstats, rclass
 			}
 
 			* check that bc and bcteam are numeric
-			cap confirm numeric variable `backchecker'
+			cap confirm numeric var `backchecker'
 
 			if _rc != 0 {
 				nois di as error `"Backchecker variable `backchecker' in backchecker() must be a numeric variable."'
@@ -426,7 +426,7 @@ program ipabcstats, rclass
 
 
 			if "`bcteam'" ~= "" {
-				cap confirm numeric variable `bcteam'
+				cap confirm numeric var `bcteam'
 
 				if _rc != 0 {
 					nois di as error `"Backchecker team variable `bcteam' in bcteam() must be a numeric variable."'
@@ -498,26 +498,26 @@ program ipabcstats, rclass
 			* add prefix to bcdate local
 			if "`bcdate'" ~= "" loc bcdate _bc`bcdate'
 
-			save `_bdata' 
+			save "`_bdata'" 
 
 			* create and save data for backcheckers
 			keep `backchecker'
 			bys `backchecker': gen backchecks = _N
 			bys `backchecker': keep if _n == 1
 
-			save `_bcerdata'
+			save "`_bcerdata'"
 
 			* creare enumerator team statistics
 			if "`bcteam'" ~= "" {
-				use `_bdata', clear
+				use "`_bdata'", clear
 				keep `bcteam'
 				bys `bcteam': gen backchecks = _N 
 				bys `bcteam': keep if _n == 1
 			}
 			
 			* merge datasets
-			use `_sdata', clear
-			merge 1:1 `id' using `_bdata', gen (_mergebc)
+			use "`_sdata'", clear
+			merge 1:1 `id' using "`_bdata'", gen (_mergebc)
 			count if _mergebc == 1
 			loc survey_only `r(N)'
 			count if _mergebc == 2
@@ -531,12 +531,12 @@ program ipabcstats, rclass
 			return scalar survey = `_surveyed'
 			loc pct_bc : piece 1 4 of  "`=(`_backchecked' / `_surveyed')*100'"
 			unab admin:	`id' `enumerator' `enumteam' `backchecker' `bcteam' `surveydate' `bcdate'
-			save `_mdata', replace
+			save "`_mdata'", replace
 
 			keep if _mergebc == 2
-			save `_bconly', emptyok
+			save "`_bconly'", emptyok
 
-			use `_mdata', clear
+			use "`_mdata'", clear
 			keep if _mergebc == 3
 			
 			* convert dates to %td format
@@ -551,52 +551,52 @@ program ipabcstats, rclass
 			}
 			
 			* save merged dataset
-			save `_mdata', replace 
+			save "`_mdata'", replace 
 			
 			* keep data of number of survey back checked by enumerator and enumteam
 			keep `enumerator'
 			bys `enumerator': gen backchecks = _N
 			bys `enumerator': keep if _n == 1
-			merge 1:1 `enumerator' using `_enumdata', nogen
+			merge 1:1 `enumerator' using "`_enumdata'", nogen
 			order `enumerator' surveys backchecks
-			save `_enumdata', replace
+			save "`_enumdata'", replace
 
 			if "`enumteam'" ~= "" {
-				use `_mdata', clear
+				use "`_mdata'", clear
 				keep `enumteam'
 				bys `enumteam': gen backchecks = _N
 				bys `enumteam': keep if _n == 1
-				merge 1:1 `enumteam' using `_enumteamdata', nogen
+				merge 1:1 `enumteam' using "`_enumteamdata'", nogen
 				order `enumteam' surveys backchecks
-				save `_enumteamdata', replace
+				save "`_enumteamdata'", replace
 			}
 			
 			* calculate average days between surveys and back checks bcers
-			use `_mdata', clear
+			use "`_mdata'", clear
 			keep `backchecker' `surveydate' `bcdate'
 			gen days = `bcdate' - `surveydate'
 			order `backchecker' days
 			collapse (mean) days, by (`backchecker')
 			lab var days "average days"
-			save `_bcavgdata'
+			save "`_bcavgdata'"
 			
 			* calculate average days between surveys and back checks for bcer teams
 			if "`bcteam'" ~= "" {
-				use `_mdata', clear
+				use "`_mdata'", clear
 				keep `bcteam' `surveydate' `bcdate'
 				gen days = `bcdate' - `surveydate'
 				order `bcteam' days
 				collapse (mean) days, by (`bcteam')
 				lab var days "average days"
-				save `_bcteamavgdata'
+				save "`_bcteamavgdata'"
 			}
 			
 			* foreach variable compare and save comparison in long format
 			clear
-			save `_diffs', emptyok
+			save "`_diffs'", emptyok
 			loc i 1
 			foreach var in `tvars' {
-				use `_mdata', clear
+				use "`_mdata'", clear
 
 				keep `admin' `keepsurvey' `bc_keepbc' `var' _bc`var' `surveydate' `bcdate'
 				
@@ -733,8 +733,8 @@ program ipabcstats, rclass
 				}
 				else keep `admin' `keepsurvey' `bc_keepbc' _v* _survey* _backcheck* _seq* _compared `surveydate' `bcdate'
 				
-				append using `_diffs'
-				save `_diffs', replace
+				append using "`_diffs'"
+				save "`_diffs'", replace
 
 			}
 			
@@ -779,7 +779,7 @@ program ipabcstats, rclass
 			backcheck backchecklabel result okrange `keepsurvey' `bc_keepbc' `surveydate' `bcdate' days ///
 			_surveyday _vdiff
 
-			save `_cdata'
+			save "`_cdata'"
 			
 			* Create summary sheet
 			encode type, gen(vartype)
@@ -800,7 +800,7 @@ program ipabcstats, rclass
 			loc count = `r(max)' - `r(min)'
 
 			forval i = 1/3 {
-				cap confirm _vdiff`i'
+				cap confirm var _vdiff`i'
 				if !_rc {
 					gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
 					lab var error_rate`i' "Type `i'"
@@ -846,13 +846,12 @@ program ipabcstats, rclass
 			}
 
 			forval i = 1/3 {
-				cap confirm _vdiff`i'
+				cap confirm var _vdiff`i'
 				if !_rc {
 					gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
 					lab var error_rate`i' "Type `i'"
 				}
 			}
-
 
 			egen valcounttotal = rowtotal(valcount?)
 			egen _vdifftotal = rowtotal(_vdiff?)
@@ -865,7 +864,8 @@ program ipabcstats, rclass
 
 			graph drop _all
 			graph twoway connected error_rate* `unit', title("Error Rates (`titleunit')") legend(col(4)) ///
-			scheme(s1color) name(summary) ytitle("%") lwidth(thin thin thin thick) lpattern(dash dash dash solid)
+				scheme(s1color) name(summary) ytitle("%") lwidth(thin thin thin thick) lpattern(dash dash dash solid)
+			
 			graph export "`c(tmpdir)'/errorrates.png", width(460) replace name(summary)
 			graph close
 			drop error_rate*
@@ -919,7 +919,7 @@ program ipabcstats, rclass
 
 			* export bc only IDs
 			if `bc_only' > 0 {
-				use `_bconly', clear
+				use "`_bconly'", clear
 				keep if _mergebc == 2
 				keep `id' `backchecker' `bcteam' _bc*
 				ds _bc*
@@ -940,7 +940,7 @@ program ipabcstats, rclass
 			}
 			
 			* create showid
-			use `_cdata', clear
+			use "`_cdata'", clear
 
 		 	bysort `id' : egen _iddifferences = total(_vdiff)
 		 	lab var _iddifferences "differences"
@@ -982,9 +982,9 @@ program ipabcstats, rclass
 				dis as err "Use a lower number to include all observations or use a percentage (add '%'). "
 			}
 
-	 		use `_cdata', clear
+	 		use "`_cdata'", clear
 			if "`full'" == "" keep if _vdiff == 1
-			save `_cdata', replace
+			save "`_cdata'", replace
 
 			lab var `surveydate' "`surveydate'"
 			loc lab = substr("`bcdate'", 4, .)
@@ -1008,7 +1008,7 @@ program ipabcstats, rclass
 				export excel using "`filename'", sheet("comparison", modify) first(var) cell(`alphavar'4)
 			}
 
-			use `_cdata', clear
+			use "`_cdata'", clear
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
 			gen _a = "", before(`=word("`id'", 1)')
 			unab id: `id'
@@ -1098,7 +1098,7 @@ program ipabcstats, rclass
 			}
 			
 			create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(backchecker) `nolabel'
-			merge 1:1 `backchecker' using `_bcavgdata', nogen
+			merge 1:1 `backchecker' using "`_bcavgdata'", nogen
 			order days, after(backchecks)
 
 			* sort data based on error rates
@@ -1133,7 +1133,7 @@ program ipabcstats, rclass
 
 			if "`bcteam'" ~= "" {
 				create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(bc team) `nolabel'
-				merge 1:1 `bcteam' using `_bcteamavgdata', nogen
+				merge 1:1 `bcteam' using "`_bcteamavgdata'", nogen
 				order days, after(backchecks)
 				* sort data based on error rates
 				loc esortvars "-error_rate"
@@ -1172,9 +1172,9 @@ program ipabcstats, rclass
 			postfile postchecks str32(variable) str80(label) str10(type) int(diffs total) ///
 				double(error_rate)	double(surveymean bcmean differences) str10(test) ///
 				double(pvalue srv ratio) ///
-				using `_checks', replace
+				using "`_checks'", replace
 
-			use `_diffs', clear
+			use "`_diffs'", clear
 			keep _vvar _vvlab _vtype _compared _vdiff _survey _backcheck
 			destring _survey _backcheck, force replace
 
@@ -1246,7 +1246,7 @@ program ipabcstats, rclass
 			}
 
 			postclose postchecks
-			use `_checks', clear
+			use "`_checks'", clear
 			mvdecode surveymean bcmean differences pvalue srv ratio, mv(-222 = .)
 			lab var surveymean 	"survey mean"
 			lab var bcmean 		"backcheck mean"
@@ -1268,13 +1268,13 @@ program ipabcstats, rclass
 			noi mata: format_varstats("`filename'", "variable stats", `mt', `rlb')
 			
 			* save enumerator statistics
-			save `_varstats', replace
+			save "`_varstats'", replace
 
 			* get return values for variable stats
 			* error_rates for type 1, type 2, type 3 and all
 			forval i = 3(-1)0 {
-				if `i' == 0 use variable type error_rate using `_varstats', clear
-				else use variable type error_rate if type == "type `i'" using `_varstats', clear
+				if `i' == 0 use variable type error_rate using "`_varstats'", clear
+				else use variable type error_rate if type == "type `i'" using "`_varstats'", clear
 				drop type
 				if `=_N' > 0 {
 					gen _id = 1
@@ -1292,8 +1292,8 @@ program ipabcstats, rclass
 			if "`ttest'`prtest'`signrank'`reliability'" ~= "" {
 				foreach test in ttest prtest signrank reliability {
 					foreach i of numlist 3 2 0 {
-						if `i' == 0 use variable type test pvalue if test == "`test'" using `_varstats', clear
-						else use variable type test pvalue if test == "`test'" & type == "type `i'" using `_varstats', clear
+						if `i' == 0 use variable type test pvalue if test == "`test'" using "`_varstats'", clear
+						else use variable type test pvalue if test == "`test'" & type == "type `i'" using "`_varstats'", clear
 						if `=_N' > 0 {
 							drop type test
 							gen _id = 1
@@ -1310,7 +1310,7 @@ program ipabcstats, rclass
 			}
 		}	
 
-	use `_originaldata', clear
+	use "`_originaldata'", clear
 
 end
 
@@ -1339,7 +1339,7 @@ program define change_str
 	ds `varlist', has(type string)
 	if `:word count `r(varlist)'' > 0 {
 		foreach var of varlist `r(varlist)' {
-			cap confirm str var `var' 
+			cap confirm string var `var' 
 			if !_rc {
 				* remove symbols
 				if "`nosymbol'" ~= "" {
