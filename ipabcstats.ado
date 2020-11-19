@@ -152,6 +152,10 @@ program ipabcstats, rclass
 				`ttest' `signrank' `prtest' `reliability' `keepsurvey' `surveydate' ///
 				using "`surveydata'", clear 
 
+
+			* get unabbrev list of id
+			unab id: `id'
+
 			* check that datsets is unique on id
 			isid `id'
 			if _rc == 459 {
@@ -210,10 +214,11 @@ program ipabcstats, rclass
 			}
 
 			* change string variables if applicable
-			unab t1vars: `t1vars'
-			unab t2vars: `t2vars'
-			unab t3vars: `t3vars'
+			if "`t1vars'" ~= "" unab t1vars: `t1vars'
+			if "`t2vars'" ~= "" unab t2vars: `t2vars'
+			if "`t3vars'" ~= "" unab t3vars: `t3vars'
 			unab tvars: `t1vars' `t2vars' `t3vars'
+			
 			change_str `tvars', `nosymbol' `lower' `upper' `trim'
 			
 			* check that the same vars listed in keepsurvey are not listed in id, enumteam and enumerator 
@@ -730,6 +735,7 @@ program ipabcstats, rclass
 				
 				append using `_diffs'
 				save `_diffs', replace
+
 			}
 			
 			* rename variables in comparison data
@@ -781,7 +787,6 @@ program ipabcstats, rclass
 			* collapse to surveydate and type
 			collapse (count) valcount = _vdiff (sum) _vdiff, by(vartype _surveyday)
 			
-
 			keep _surveyday vartype _vdiff valcount 
 
 			* reshape to table	
@@ -795,15 +800,19 @@ program ipabcstats, rclass
 			loc count = `r(max)' - `r(min)'
 
 			forval i = 1/3 {
-				gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
-				lab var error_rate`i' "Type `i'"
+				cap confirm _vdiff`i'
+				if !_rc {
+					gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
+					lab var error_rate`i' "Type `i'"
+				}
 			}
-
 
 			tempname rates_time
 			mkmat _surveyday _vdiff* valcount*, matrix(`rates_time')
 			return matrix rates_time = `rates_time'
-			drop error_rate1 error_rate2 error_rate3
+			forval i = 1/3 {
+				cap drop error_rate`i'
+			}
 
 			if `count' <= 30 {
 				gen days = _n
@@ -837,13 +846,16 @@ program ipabcstats, rclass
 			}
 
 			forval i = 1/3 {
-				gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
-				lab var error_rate`i' "Type `i'"
+				cap confirm _vdiff`i'
+				if !_rc {
+					gen error_rate`i' = round((_vdiff`i'/valcount`i') * 100, 0.01), after(_vdiff`i')
+					lab var error_rate`i' "Type `i'"
+				}
 			}
 
 
-			egen valcounttotal = rowtotal(valcount1 valcount2 valcount3)
-			egen _vdifftotal = rowtotal(_vdiff1 _vdiff2 _vdiff3)
+			egen valcounttotal = rowtotal(valcount?)
+			egen _vdifftotal = rowtotal(_vdiff?)
 			gen error_rate_total = round((_vdifftotal / valcounttotal) * 100, 0.01)
 			lab var error_rate_total "Total" 
 
@@ -961,7 +973,7 @@ program ipabcstats, rclass
 		 			export excel `id' `enumerator' `enumteam' `backchecker' `bcteam' _iddifferences _idcount _iderror_rate ///
 		 			using "`filename'", sheet("IDs") firstrow(varl) cell(B3)
 		 			mata: format_showids("`filename'", "IDs")
-					gen _a = "", before(`id')
+					gen _a = "", before(`=word("`id'", 1)')
 					mata: adjust_column_width("`filename'", "IDs")
 		 		}
 		
@@ -982,7 +994,7 @@ program ipabcstats, rclass
 
 			order `exp_vars' `bc_keepbc'
 			export excel `exp_vars' using "`filename'", sheet("comparison") first(varl) cell(B4) `nolabel'
-			
+
 			if "`bc_keepbc'" ~= "" {
 				
 				unab exp_vars: `exp_vars' 
@@ -998,7 +1010,7 @@ program ipabcstats, rclass
 
 			use `_cdata', clear
 			order `id' `enumerator' `enumteam' `backchecker' `bcteam' variable label type survey surveylabel backcheck backchecklabel result `surveydate' `bcdate' days `keepsurvey' `bc_keepbc'
-			gen _a = "", before(`id')
+			gen _a = "", before(`=word("`id'", 1)')
 			unab id: `id'
 			
 			* apply nolabel option
@@ -1017,7 +1029,17 @@ program ipabcstats, rclass
 			
 			* create and export enumerator and bcer statistics
 			create_stats using "`_diffs'", enum(`enumerator') enumdata("`_enumdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enumerator)  `nolabel'
-			gsort -error_rate -error_rate1 -error_rate2 -error_rate3
+			
+			* sort data based on error rates
+			loc esortvars ""
+			forval i = 1/3 {
+				cap confirm var error_rate`i'
+				if !_rc {
+					loc esortvars "`esortvars' -error_rate`i'"
+				}
+			}
+
+			gsort `esortvars'
 			
 			export excel using "`filename'", sheet("enumerator stats", replace) first(varl) cell(B3) `nolabel'
 			
@@ -1044,7 +1066,15 @@ program ipabcstats, rclass
 		
 			if "`enumteam'" ~= "" {
 				create_stats using "`_diffs'", enum(`enumteam') enumdata("`_enumteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(enum team) `nolabel'
-				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
+				* sort data based on error rates
+				loc esortvars "-error_rate"
+				forval i = 1/3 {
+					cap confirm var error_rate`i'
+					if !_rc {
+						loc esortvars "`esortvars' -error_rate`i'"
+					}
+				}
+				gsort `esortvars'
 				export excel using "`filename'", sheet("enumerator team stats", replace) first(varl) cell(B3) `nolabel'
 				
 				forval i = 3(-1)1 {
@@ -1070,7 +1100,16 @@ program ipabcstats, rclass
 			create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(backchecker) `nolabel'
 			merge 1:1 `backchecker' using `_bcavgdata', nogen
 			order days, after(backchecks)
-			gsort -error_rate -error_rate1 -error_rate2 -error_rate3
+
+			* sort data based on error rates
+			loc esortvars "-error_rate"
+			forval i = 1/3 {
+				cap confirm var error_rate`i'
+				if !_rc {
+					loc esortvars "`esortvars' -error_rate`i'"
+				}
+			}
+			gsort `esortvars'
 			export excel using "`filename'", sheet("backchecker stats", replace) first(varl) cell(B3) `nolabel'
 
 			forval i = 3(-1)1 {
@@ -1096,7 +1135,15 @@ program ipabcstats, rclass
 				create_stats using "`_diffs'", bc enum(`backchecker') enumdata("`_bcerteamdata'") type(_vtype) compared(_compared) different(_vdiff) enumlabel(bc team) `nolabel'
 				merge 1:1 `bcteam' using `_bcteamavgdata', nogen
 				order days, after(backchecks)
-				gsort -error_rate -error_rate1 -error_rate2 -error_rate3
+				* sort data based on error rates
+				loc esortvars "-error_rate"
+				forval i = 1/3 {
+					cap confirm var error_rate`i'
+					if !_rc {
+						loc esortvars "`esortvars' -error_rate`i'"
+					}
+				}
+				gsort `esortvars'
 				export excel using "`filename'", sheet("backchecker team stats", replace) first(varl) cell(B3)
 
 				forval i = 3(-1)1 {
@@ -1289,7 +1336,7 @@ end
 program define change_str
 	syntax varlist [, NOSymbol trim upper lower]
 
-	ds, has(type string)
+	ds `varlist', has(type string)
 	if `:word count `r(varlist)'' > 0 {
 		foreach var of varlist `r(varlist)' {
 			cap confirm str var `var' 
