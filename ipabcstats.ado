@@ -1,24 +1,16 @@
-*! version 2.2 Innovations for Poverty Action
+*! version 1.0 Innovations for Poverty Action
+*! version 1.0 Ishmail Azindoo Baako & Rosemarie Sandino
 
 /*
 This update to bcstats includes work previously done by Chris boyer and the TI network 
 at Innovations for Poverty Action. 
 
 bcstats was originally programmed by:
-Matt White (Innovations for Poverty Action)
-			
-Wishlist:
-	-- dialog
-	-- fuzzy match strings (preferable write new command, alternative use matchit, reclink or strgroup)
-	-- allow string enum, enumteam, bc, and bcteam variables
-
+Matt White (Innovations for Poverty Action)			
 */
 
 program ipabcstats, rclass
-    version 	14.2
-    cap version 15.1 /* written in stata 15.1 but will run in stata 14.2 */ 
-	set graphics on
-   pause on
+    
     #d;
     syntax, 																			
     	Surveydata(str) Bcdata(str)
@@ -34,7 +26,17 @@ program ipabcstats, rclass
 	   	[EXCLUDENum(numlist) EXCLUDEStr(str asis) EXCLUDEMISSing LOwer UPper NOSymbol TRim NOLabel]
 	   	surveydate(name) bcdate(name)
     ;
-	#d cr			
+	#d cr	
+
+		* check stata version
+		if `=_caller()' < 14.2 {
+			disp as err "This version of Stata is `=_caller()'; this program requires version 14.2"
+			ex 9
+		} 
+		else vers `=_caller()'
+
+		* set graphics
+		set graphics on
 
 		* save data in memory
 		tempfile _originaldata
@@ -43,24 +45,24 @@ program ipabcstats, rclass
 		* check syntax
 		* check that at least one variable is specified in t1, t2 or t3
 		if "`t1vars'`t2vars'`t3vars'" == "" {
-			disp as err "variables incorrectly specified: must specify, at minimum, one of options t1vars(), t2vars(), or t3vars()"
+			disp as err "must specify, at minimum, one of options t1vars(), t2vars() or t3vars()"
 			ex 198
 		}
 		
 		* check level		
 		if `level' ~= -1 & "`ttest'`prtest'" == "" {
-			di as err "option level must be specified with option ttest or option prtest"
+			di as err "option level must be specified with option ttest or prtest"
 			ex 198
 		}
 		if `level' == -1 loc level = c(level)
 		else {
 			if !inrange(`level', 10, 99.99) {
-				di as err "level() must be between 10 and 99.99 inclusive"
+				di as err "level `level' not allowed; level() must be between 10 and 99.99 inclusive"
 				ex 198
 			}
 		}
 
-		* ensure file is .xlsx
+		* ensure output file is a .xlsx
 		loc ext = substr("`filename'", -(strpos(reverse("`filename'"), ".")), .)
 		
 		if "`ext'" == ".xls" | "`ext'" == ".xlsx" | "`ext'" == "" {
@@ -68,7 +70,7 @@ program ipabcstats, rclass
 			if "`ext'" == ".xls" {
 
 				noi dis "File must be exported in .xlsx format. Adjusting file extension to .xlsx."
-				loc fileroot = substr("`filename'", 1, (strpos("`filename'", "."))-1)
+				loc fileroot = substr("`filename'", 1, (strpos("`filename'", ".")) - 1)
 				loc filename = "`fileroot'.xlsx"
 			}
 			if "`ext'" == "" {
@@ -80,10 +82,11 @@ program ipabcstats, rclass
 			di as err "file type `ext' not allowed. File must be in .xlsx format"
 			ex 609 
 		}
-				 
-		* check showid
+
+		* set showid to default of 30% if not specified
 		if "`showid'" == "" loc showid "30%"
 
+		* check that specified show id is not greater than 100% if specified in %
 		if regexm("`showid'", "%") {
 			loc showid = real(subinstr("`showid'", "%", "", .))/100
 			loc percent 1
@@ -93,6 +96,7 @@ program ipabcstats, rclass
 			}
 		}
 
+		* check that showid coun is not greater than number of variables specified
 		else if `showid' > `:word count `t1vars' `t2vars' `t3vars'' {
 			dis as err "option showid (`showid') is higher than the highest possible number of comparisons (`: word count `t1vars' `t2vars' `t3vars'')." 
 			dis as err "Use a lower number or use a percentage (add '%')."
@@ -108,10 +112,11 @@ program ipabcstats, rclass
 			}
 		}
 	
-		* check specifications in nodiff vs exclude
+		* check that values in nodiffnum & excludenum are mutually exclusive
 		if "`nodiffnum'" ~= "" & "`excludenum'" ~= "" {
-			loc nv_both: list nodiffnum | excludenum
-			if wordcount(`"`nodiffnum' `excludenum'"') > wordcount("`nv_both'") {
+			loc nv_all: list nodiffnum | excludenum
+			if wordcount(`"`nodiffnum' `excludenum'"') > wordcount("`nv_all'") {
+				loc nv_both: list nodiffnum & excludenum
 				di as err `"value(s) "`nv_both'" not allowed in both nodiffnum() and excludenum()"'
 				ex 198
 			}
@@ -119,6 +124,7 @@ program ipabcstats, rclass
 
 		loc nodiffnum_list = subinstr(trim(itrim("`nodiffnum'")), " ", ",", .)
 		
+		* check that values in nodiffstr & excludestr are mutually exclusive
 		if `"`nodiffstr'"' ~= "" & `"`excludestr'"' ~= "" {
 			loc nd_rest `"`nodiffstr'"'
 			loc c = 1
@@ -169,32 +175,27 @@ program ipabcstats, rclass
 			if _rc != 0 {
 				summ `id'
 				if abs(floor(log10(`r(max)'))) + 1 > 20 {
-					nois di as error "Warning: cannot reversibly convert `id' to string without loss of precision. Consider using a different ID or convert yourself."
-					nois di as error "Columns widths may not automatically adjust for this variable."
+					disp as err "Warning: cannot reversibly convert `id' to string without loss of precision. Consider using a different ID or convert yourself."
+					disp as err "Columns widths may not automatically adjust for this variable."
 				}
 				else if abs(floor(log10(`r(max)'))) + 1 > 8 {
-					nois di as error "Warning: using large numeric IDs may result in loss of precision. Consider converting to string!"
-					nois di as error "Columns widths may not automatically adjust for this variable."
+					disp as err "Warning: using large numeric IDs may result in loss of precision. Consider converting to string!"
+					disp as err "Columns widths may not automatically adjust for this variable."
 				}
 			}
 
 			* check that enum and enumteam are numeric
 			cap confirm numeric var `enumerator'
-
-			if _rc != 0 {
-				nois di as error `"Enumerator variable `enumerator' in enumerator() must be a numeric variable."'
-				ex 108
+			if _rc == 7 {
+				disp as err `"Enumerator variable `enumerator' in enumerator() must be a numeric variable."'
+				ex 198
 			}
 
-
-			if "`enumteam'" ~= "" {
-				cap confirm numeric var `enumteam'
-
-				if _rc != 0 {
-					nois di as error `"Enumerator team variable `enumteam' in enumteam() must be a numeric variable."'
-					nois di as error `"enumteam option will not be included in output."'
-					loc enumteam ""
-				}
+			cap confirm numeric var `enumteam'
+			if _rc == 7 {
+				nois di as error `"Enumerator team variable `enumteam' in enumteam() must be a numeric variable."'
+				nois di as error `"enumteam option will not be included in output."'
+				loc enumteam ""
 			}
 
 			* check that no variable is prefixed with _bc
@@ -209,7 +210,7 @@ program ipabcstats, rclass
 				cap confirm numeric var `opt'
 				if _rc == 7 {
 					di as err "Variable `opt' in option `opt'() must be a date formatted variable"
-					ex 7
+					ex 198
 				}
 			}
 
@@ -226,15 +227,15 @@ program ipabcstats, rclass
 				unab keepsurvey: `keepsurvey'
 				foreach var of varlist `keepsurvey' {
 					if `:list var in id' {
-						dis as err "variable `var' not allowed in both id() and keepsurvey() options"
+						disp as err "variable `var' not allowed in both id() and keepsurvey() options"
 						ex 198
 					}
 					if `:list var in enumerator' {
-						dis as err "variable `var' not allowed in both enumerator() and keepsurvey() options"
+						disp as err "variable `var' not allowed in both enumerator() and keepsurvey() options"
 						ex 198
 					}
 					if `:list var in enumteam' & "`enumteam'" ~= "" {
-						dis as err "variable `var' not allowed in both enumteam() and keepsurvey() options"
+						disp as err "variable `var' not allowed in both enumteam() and keepsurvey() options"
 						ex 198
 					}
 				}
@@ -251,7 +252,7 @@ program ipabcstats, rclass
 					loc okrcomb = substr("`okrange'", 1, strpos("`okrange'", "]"))
 					gettoken okrvar okrcomb: okrcomb, parse([)
 					
-					* Check that combo has "[", "," and "]" inspecified order
+					* Check that combo has "[", "," and "]" in specified order
 					loc okrcomb = subinstr("`okrcomb'", " ", "", .)
 
 					cap assert (strpos("`okrcomb'", "[") > 0) & (strpos("`okrcomb'", ",") > strpos("`okrcomb'", "[")) & (strpos("`okrcomb'", "]") > strpos("`okrcomb'", ","))
@@ -261,15 +262,16 @@ program ipabcstats, rclass
 					}
 					* check that range was specified
 					else if strpos("`okrvar'", ",") > 0 {
-						di as err `"option okrange() incorrectly specified: variable list "`okrvar'" not allowed"'
+						di as err `"option okrange() incorrectly specified; variable list "`okrvar'" not allowed"'
 						ex 198
 					}
 					
 					* gen okrmin and okrange
 					loc okrmin = substr("`okrcomb'", strpos("`okrcomb'", "[") + 1, strpos("`okrcomb'", ",") - strpos("`okrcomb'", "[") - 1)
 					loc okrmax = substr("`okrcomb'", strpos("`okrcomb'", ",") + 1, strpos("`okrcomb'", "]") - strpos("`okrcomb'", ",") - 1)
+					
 					* check that range specified meets requirement.
-					* ie. minumum must be prefixed by "-", at least minimum or max must be specified
+					* ie. minumum must be prefixed with "-" and at least minimum or max must be specified
 					if "`okrmin'" == "" & "`okrmax'" == "" {
 						di as err `"option okrange() incorrectly specified: range "`okrcomb'" not allowed"'
 						ex 198
@@ -314,12 +316,12 @@ program ipabcstats, rclass
 			* check the comparison variables
 			foreach var of loc rangevars {
 				if !`:list var in tvars' {
-					di as err "option okrange() incorrectly specified: `var' not type 1, type 2, or type 3 variable"
+					di as err "option okrange() incorrectly specified; `var' not type 1, type 2, or type 3 variable"
 					ex 198
 				}
 			}
 
-			* check that stability and reliability test vars are specified as t2 and t3 vars
+			* check that stability and reliability test vars are t2 or t3 vars
 			* stability checks
 			
 			if "`ttest'`prtest'`signrank'`reliability'" ~= "" {
@@ -420,7 +422,7 @@ program ipabcstats, rclass
 			cap confirm numeric var `backchecker'
 
 			if _rc != 0 {
-				nois di as error `"Backchecker variable `backchecker' in backchecker() must be a numeric variable."'
+				disp as err `"Backchecker variable `backchecker' in backchecker() must be a numeric variable."'
 				ex 108
 			}
 
@@ -429,8 +431,8 @@ program ipabcstats, rclass
 				cap confirm numeric var `bcteam'
 
 				if _rc != 0 {
-					nois di as error `"Backchecker team variable `bcteam' in bcteam() must be a numeric variable."'
-					nois di as error `"enumteam option will not be included in output."'
+					disp as err `"Backchecker team variable `bcteam' in bcteam() must be a numeric variable."'
+					disp as err `"enumteam option will not be included in output."'
 					loc bcteam ""
 				}
 			}
@@ -445,7 +447,7 @@ program ipabcstats, rclass
 					foreach item in `okrvars' {
 						cap unab check: item
 						if _rc == 111 {
-							di as err "variable `item' specified in okrange() not found in backcheck data"
+							disp as err "variable `item' specified in okrange() not found in backcheck data"
 							ex 111
 						}
 					}
@@ -457,15 +459,15 @@ program ipabcstats, rclass
 				unab keepbc: `keepbc'
 				foreach var of varlist `keepbc' {
 					if `:list var in id' {
-						dis as err "variable `var' not allowed in both id() and keepbc() options"
+						disp as err "variable `var' not allowed in both id() and keepbc() options"
 						ex 198
 					}
 					if `:list var in backchecker' {
-						dis as err "variable `var' not allowed in both backchecker() and keepbc() options"
+						disp as err "variable `var' not allowed in both backchecker() and keepbc() options"
 						ex 198
 					}
 					if `:list var in bcteam' & "`bcteam'" ~= "" {
-						dis as err "variable `var' not allowed in both bcteam() and keepbc() options"
+						disp as err "variable `var' not allowed in both bcteam() and keepbc() options"
 						ex 198
 					}
 				}
@@ -482,13 +484,16 @@ program ipabcstats, rclass
 				* check that variale length is not greater than 29
 				else if `=length("`var'")' > 29 {
 					disp as err `"variable `var' is too long. Rename variable"'
+					ex 198
 				}
+
 				* prefix the backcheck var with _bc
 				else {
 					cap confirm var `var'
 					if !_rc {
 						ren `var' _bc`var'
 					}
+
 					if `:list var in keepbc' {
 						loc bc_keepbc = trim(itrim("`bc_keepbc' _bc`var'"))
 					}
@@ -607,7 +612,7 @@ program ipabcstats, rclass
 				if "`excludemissing'" ~= "" gen _compared = !missing(`var') & !missing(_bc`var') 
 				else gen _compared = 1
 				
-				* change to not compared for values included EXCLUDENum
+				* apply excludenum: change to "not compared" if values is included in excludenum
 				cap confirm numeric var `var' 
 				if !_rc {
 					if "`excludenum'" ~= "" {
@@ -618,6 +623,8 @@ program ipabcstats, rclass
 						}
 					}
 				}
+
+				* apply excludestr: change to "not compared" if values is included in excludestr
 				else {
 					if `"`excludestr'"' ~= "" {
 						local rest `"`excludestr'"'
@@ -681,9 +688,8 @@ program ipabcstats, rclass
 					}
 					
 					* apply nodiff
-					if "`nodiffnum'" ~= "" {
-						replace _vdiff = 0 if inlist(_bc`var', `nodiffnum_list')
-					}
+					if "`nodiffnum'" ~= "" replace _vdiff = 0 if inlist(_bc`var', `nodiffnum_list')
+
 				}
 				else {
 					* apply nodiff for string variables
@@ -714,7 +720,8 @@ program ipabcstats, rclass
 					cap decode `var'	, gen (_surveylab)
 					if _rc == 182 {
 						gen _surveylab = ""
-					}					
+					}
+
 					tostring _bc`var', gen (_backcheck) usedisplayformat force
 					cap decode _bc`var'	, gen (_backchecklab)
 					if _rc == 182 {
@@ -978,8 +985,8 @@ program ipabcstats, rclass
 		 		}
 		
 			if `showid' > `idmin' & `showid' < `idmax' {
-				dis as err "opt showid (`showid') is higher than the number of comparisons for at least one observation (`idmin')." 
-				dis as err "Use a lower number to include all observations or use a percentage (add '%'). "
+				disp as err "opt showid (`showid') is higher than the number of comparisons for at least one observation (`idmin')." 
+				disp as err "Use a lower number to include all observations or use a percentage (add '%'). "
 			}
 
 	 		use "`_cdata'", clear
