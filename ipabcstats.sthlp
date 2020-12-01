@@ -104,9 +104,9 @@ multiple, consecutive internal blanks in string variables before
 comparing{p_end}
 {synoptline}
 {p2colreset}{...}
-{p 4 6 2}* {opt surveydata()}, {opt bcdata()}, and {opt id()} are
-required.{p_end}
-{p 4 6 2}* {opt t1vars()}, {opt t2vars()}, or {opt t3vars()} is required.
+{p 4 6 2}* {opt surveydata()}, {opt bcdata()}, {opt id()}, {opt enumerator()}, and {opt backchecker()} are required.{p_end}
+{p 4 6 2}* Note that {opt enumerator()}, {opt backchecker()}, {opt enumteam()}, and {opt bcteam()} must be numeric variables.{p_end}
+{p 4 6 2}+ At least one type option must be specified. {p_end}
 
 
 {marker description}{...}
@@ -123,7 +123,7 @@ stability checks for type 2 and type 3 variables.
 {title:Remarks}
 
 {pstd}
-The GitHub repository for {cmd:bcstats} is
+The GitHub repository for {cmd:ipabcstats} is
 {browse "https://github.com/PovertyAction/ipabcstats":here}.
 Previous versions may be found there: see the tags.
 
@@ -316,7 +316,7 @@ type 3 variables{p_end}
 
 {synopt:{cmd:r(enum_bc)}}percentage of surveys backchecked for all enumerators {p_end}
 {synopt:{cmd:r(rates)}}error rates by variable type {p_end}
-{synopt:{cmd:r(rates_unit)}}error rates by variable type over time{p_end}
+{synopt:{cmd:r(rates_time)}}error rates by variable type over time{p_end}
 {p2colreset}{...}
 
 
