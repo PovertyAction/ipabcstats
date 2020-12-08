@@ -28,12 +28,7 @@ program ipabcstats, rclass
     ;
 	#d cr	
 
-		* check stata version
-		if `=_caller()' < 14.2 {
-			disp as err "This version of Stata is `=_caller()'; this program requires version 14.2"
-			ex 9
-		} 
-		else vers `=_caller()'
+		version 14.2
 
 		* set graphics
 		set graphics on
